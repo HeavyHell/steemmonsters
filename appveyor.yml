@@ -50,6 +50,7 @@ install:
 - cmd: conda install --yes conda-build setuptools pip pytest-pylint parameterized cryptography
 - cmd: conda install --yes pycryptodomex scrypt pyyaml pytest pytest-mock coverage mock appdirs pylibscrypt
 - cmd: conda install --yes ecdsa requests future websocket-client pytz six Click events prettytable pyinstaller
+- cmd: conda install --yes beem colorama termcolor
 
 
 build_script:
@@ -57,7 +58,11 @@ build_script:
 - cmd: python setup.py build
 - cmd: python setup.py install --user
 
-after_intall:
+test_script:
+# Run the project tests
+- cmd: py.test
+
+after_test:
  # If tests are successful, create binary packages for the project.
 - cmd: pyinstaller steemmonsters-onedir.spec
 - cmd: pyinstaller steemmonsters-onefile.spec
