@@ -22,13 +22,13 @@ install:
     $env:COMM_HASH = $env:APPVEYOR_REPO_COMMIT.Substring(0,8)
     
     if ($env:APPVEYOR_PULL_REQUEST_NUMBER) {
-        $env:BUILD = "beempy-{0}-{1}-{2}_win64.zip" -f $env:COMM_TAG, $env:COMM_HASH, $env:COMM_PY
-        $env:BUILD2 = "beempy-onefile-{0}-{1}-{2}_win64.zip" -f $env:COMM_TAG, $env:COMM_HASH, $env:COMM_PY
+        $env:BUILD = "steemmonsters-{0}-{1}-{2}_win64.zip" -f $env:COMM_TAG, $env:COMM_HASH, $env:COMM_PY
+        $env:BUILD2 = "steemmonsters-onefile-{0}-{1}-{2}_win64.zip" -f $env:COMM_TAG, $env:COMM_HASH, $env:COMM_PY
         $env:AVVER = "{0}-{1}" -f $env:COMM_TAG.TrimStart("v"), $env:COMM_HASH
     }
     else {
-        $env:BUILD = "beempy-{0}-{1}-{2}-{3}_win64.zip" -f $env:COMM_TAG, $env:COMM_COUNT, $env:COMM_HASH, $env:COMM_PY
-        $env:BUILD2 = "beempy-onefile-{0}-{1}-{2}-{3}_win64.zip" -f $env:COMM_TAG, $env:COMM_COUNT, $env:COMM_HASH, $env:COMM_PY
+        $env:BUILD = "steemmonsters-{0}-{1}-{2}-{3}_win64.zip" -f $env:COMM_TAG, $env:COMM_COUNT, $env:COMM_HASH, $env:COMM_PY
+        $env:BUILD2 = "steemmonsters-onefile-{0}-{1}-{2}-{3}_win64.zip" -f $env:COMM_TAG, $env:COMM_COUNT, $env:COMM_HASH, $env:COMM_PY
         $env:AVVER = "{0}-{1}" -f $env:COMM_TAG.TrimStart("v"), $env:COMM_COUNT
     }
 
@@ -70,8 +70,6 @@ after_test:
 # package artifacts
 - cmd: copy /Y C:\OpenSSL-Win64\bin\libeay32.dll dist\steemmonsters
 - cmd: copy /Y C:\OpenSSL-Win64\bin\ssleay32.dll dist\steemmonsters
-# - cmd: 7z a -­mx9 beempy.zip %APPVEYOR_BUILD_FOLDER%\dist\beempy
-#- ps: 7z a -m0=LZMA2 -mx9 $env:BUILD .\dist\beempy
 - ps: 7z a $env:BUILD .\dist\steemmonsters
 - ps: 7z a $env:BUILD2 .\dist\steemmonsters.exe
 
@@ -93,10 +91,7 @@ artifacts:
   name: steemmonsters onefile
 - path: $(BUILD2).sha256
   name: steemmonsters onefile sha256 hash
-#- path: beempy.zip
-#  name: beempy_zip
-#- path: beempy.zip.sha256
-#  name: beempy_zip sha256 hash
+
 
 on_finish: 
 - ps: | # update appveyor build version, done last to prevent webhook breakage

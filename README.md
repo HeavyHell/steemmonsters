@@ -1,5 +1,8 @@
 # Python library for steem monsters!
 
+[![Build status](https://ci.appveyor.com/api/projects/status/01t13py6r7f1aotj?svg=true)](https://ci.appveyor.com/project/holger80/steemmonsters)
+
+
 Steem monsters is a fully decentralized trading card game on the steem blockchain.
 
 ## Installation
