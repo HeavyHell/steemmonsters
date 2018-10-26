@@ -12,7 +12,6 @@ from timeit import default_timer as timer
 import logging
 
 
-
 class Api(object):
     """ Access the steemmonsters API
     """
@@ -21,11 +20,11 @@ class Api(object):
     def get_card_details(self):
         response = ""
         cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:        
+        while str(response) != '<Response [200]>' and cnt2 < 10:
             response = requests.get(self.__url__ + "cards/get_details")
             if str(response) != '<Response [200]>':
                 time.sleep(2)
-            cnt2 += 1            
+            cnt2 += 1
         return response.json()
 
     def find_cards(self, card_ids):
@@ -61,21 +60,21 @@ class Api(object):
     def get_for_sale(self):
         response = ""
         cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:        
+        while str(response) != '<Response [200]>' and cnt2 < 10:
             response = requests.get(self.__url__ + "market/for_sale")
             if str(response) != '<Response [200]>':
                 time.sleep(2)
-            cnt2 += 1            
+            cnt2 += 1
         return response.json()
 
     def get_purchases_settings(self):
         response = ""
         cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:        
+        while str(response) != '<Response [200]>' and cnt2 < 10:
             response = requests.get(self.__url__ + "purchases/settings")
             if str(response) != '<Response [200]>':
                 time.sleep(2)
-            cnt2 += 1            
+            cnt2 += 1
         return response.json()
 
     def get_from_block(self, block_num):

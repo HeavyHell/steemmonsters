@@ -17,8 +17,6 @@ import hashlib
 from datetime import date, datetime, timedelta
 import requests
 import logging
-import random
-import string
 import math
 import six
 from time import sleep
@@ -36,6 +34,7 @@ try:
 except ImportError:
     def colored(text, color):
         return text
+
 
 def log(string, color, font="slant"):
     six.print_(colored(string, color))
@@ -55,23 +54,24 @@ class SMPrompt(Cmd):
     appbase = True
     log = logging.getLogger(__name__)
     verbosity = ["critical", "error", "warn", "info", "debug"][1]
-    log.setLevel(getattr(logging, verbosity.upper()))    
-    
+    log.setLevel(getattr(logging, verbosity.upper()))
+
     with open('config.json', 'r') as f:
         sm_config = json.load(f)
 
     nodes = NodeList()
     nodes.update_nodes()
-    stm = Steem(node=nodes.get_nodes(normal=normal, appbase=appbase, wss=wss, https=https), num_retries=5, call_num_retries=3, timeout=15)
+    nodelist = nodes.get_nodes(normal=normal, appbase=appbase, wss=wss, https=https)
+    stm = Steem(node=nodelist, num_retries=5, call_num_retries=3, timeout=15)
     b = Blockchain(mode='head', steem_instance=stm)
- 
+
     def do_exit(self, inp):
         print("Bye")
         return True
-    
+
     def help_exit(self):
         print('exit the application. Shorthand: x q Ctrl-D.')
- 
+
     def do_set_account(self, inp):
         self.account = inp
         print("setting '{}'".format(inp))
@@ -88,8 +88,8 @@ class SMPrompt(Cmd):
 
     def do_show_config(self, inp):
         tx = json.dumps(self.sm_config, indent=4)
-        print(tx)        
- 
+        print(tx)
+
     def do_show_cards(self, inp):
         if inp == "":
             cards = self.api.get_collection(self.sm_config["account"])
@@ -97,23 +97,27 @@ class SMPrompt(Cmd):
             cards = self.api.get_collection(inp)
         tx = json.dumps(cards, indent=4)
         print(tx)
- 
+
     def do_show_deck(self, inp):
         tx = json.dumps(self.sm_config["decks"][inp], indent=4)
         print(tx)
 
     def do_ranking(self, inp):
-        response = self.api.get_player_details(self.sm_config["account"])
+        if inp == "":
+            account = self.sm_config["account"]
+        else:
+            account = inp
+        response = self.api.get_player_details(account)
         tx = json.dumps(response, indent=4)
         print(tx)
 
     def do_cancel(self, inp):
         self.stm.wallet.unlock(self.sm_config["wallet_password"])
         acc = Account(self.sm_config["account"], steem_instance=self.stm)
-        trx = self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
+        self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
         print("sm_cancel_match broadcasted!")
-        sleep(3)        
- 
+        sleep(3)
+
     def do_play(self, inp):
         if inp == "":
             inp = "random"
@@ -124,19 +128,22 @@ class SMPrompt(Cmd):
                 deck_ids = self.sm_config["decks"][inp]
             else:
                 deck_ids_list = list(self.sm_config["decks"].keys())
-            statistics = {"won": 0, "battles": 0}
+            statistics = {"won": 0, "battles": 0, "loosing_streak": 0,
+                          "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
             play_round = 0
-            cnt = 0
+
             self.stm.wallet.unlock(self.sm_config["wallet_password"])
             mana_cap = self.sm_config["mana_cap"]
             ruleset = self.sm_config["ruleset"]
             match_type = self.sm_config["match_type"]
-            
+
             acc = Account(self.sm_config["account"], steem_instance=self.stm)
-            
+
             response = self.api.get_player_details(acc["name"])
-            print("%s rating: %d, battles: %d, wins: %d, cur. streak: %d" % (acc["name"], response["rating"], response["battles"], response["wins"], response["current_streak"]))
-            
+            print("%s rank: %s, rating: %d, battles: %d, "
+                  "wins: %d, cur. streak: %d" % (acc["name"], response["rank"], response["rating"],
+                                                 response["battles"], response["wins"], response["current_streak"]))
+
             response = self.api.get_card_details()
             cards = {}
             cards_by_name = {}
@@ -147,9 +154,11 @@ class SMPrompt(Cmd):
             mycards = {}
             for r in response["cards"]:
                 if r["card_detail_id"] not in mycards:
-                    mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": cards[r["card_detail_id"]]["name"], "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
+                    mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": cards[r["card_detail_id"]]["name"],
+                                                    "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
                 elif r["xp"] > mycards[r["card_detail_id"]]["xp"]:
-                    mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": cards[r["card_detail_id"]]["name"], "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}            
+                    mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": cards[r["card_detail_id"]]["name"],
+                                                    "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
             continue_playing = True
             while continue_playing and (self.sm_config["play_counter"] < 0 or play_round < self.sm_config["play_counter"]):
                 if "play_inside_ranking_border" in self.sm_config and self.sm_config["play_inside_ranking_border"]:
@@ -157,6 +166,11 @@ class SMPrompt(Cmd):
                     response = self.api.get_player_details(acc["name"])
                     if response["rating"] < ranking_border[0] or response["rating"] > ranking_border[1]:
                         print("Stop playing, rating %d outside [%d, %d]" % (response["rating"], ranking_border[0], ranking_border[1]))
+                        continue_playing = False
+                        continue
+                if "stop_on_loosing_streak" in self.sm_config and self.sm_config["stop_on_loosing_streak"] > 0:
+                    if statistics["loosing_streak"] >= self.sm_config["stop_on_loosing_streak"]:
+                        print("Stop playing, did lose %d times in a row" % (statistics["loosing_streak"]))
                         continue_playing = False
                         continue
                 if inp == "random":
@@ -176,7 +190,7 @@ class SMPrompt(Cmd):
                         card_id = cards_by_name[ids]["id"]
                     else:
                         card_id = ids
-                        
+
                     if summoner is None:
                         summoner = mycards[card_id]["uid"]
                         for x in xp_level:
@@ -188,26 +202,34 @@ class SMPrompt(Cmd):
                         summoner_level = int(math.ceil(summoner_level / max_level_rarity[cards[card_id]["rarity"]] * 4))
                     else:
                         monsters.append(mycards[card_id]["uid"])
-        
+
                 deck = {"trx_id": "", "summoner": summoner, "monsters": monsters, "secret": secret}
-                
+
                 team_hash = generate_team_hash(deck["summoner"], deck["monsters"], deck["secret"])
-                json_data = {"match_type":match_type, "mana_cap":mana_cap,"team_hash":team_hash,"summoner_level":summoner_level,"ruleset":ruleset}
+                json_data = {"match_type": match_type, "mana_cap": mana_cap, "team_hash": team_hash, "summoner_level": summoner_level, "ruleset": ruleset}
                 trx = self.stm.custom_json('sm_find_match', json_data, required_posting_auths=[acc["name"]])
                 print("sm_find_match broadcasted...")
                 sleep(3)
                 found = False
+                start_block_num = None
                 for h in self.b.stream(opNames=["custom_json"]):
+                    if start_block_num is None:
+                        start_block_num = h["block_num"]
+                    elif (h["block_num"] - start_block_num) * 20 > 60:
+                        print("Could not find transaction id %s" % (deck["trx_id"]))
+                        break
                     if h["id"] == 'sm_find_match':
                         if json.loads(h['json'])["team_hash"] == team_hash:
                             found = True
                             break
-                start_block_find = h["block_num"]
-                deck["trx_id"] =  h['trx_id']
+                deck["trx_id"] = h['trx_id']
                 block_num = h["block_num"]
                 print("Transaction id found (%d - %s)" % (block_num, deck["trx_id"]))
-                
-                
+                if not found:
+                    trx = self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
+                    sleep(3)
+                    continue
+
                 response = ""
                 cnt2 = 0
                 trx_found = False
@@ -220,17 +242,17 @@ class SMPrompt(Cmd):
                             trx_found = True
                         # elif 'error' in response.json():
                         #    print(response.json()["error"])
-                    cnt2 += 1                
+                    cnt2 += 1
                 if 'error' in response.json():
                     print(response.json()["error"])
                     if "The current player is already looking for a match." in response.json()["error"]:
-                        trx = self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
+                        self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
                         sleep(3)
                     break
                 else:
                     print("Transaction is valid...")
-                #     print(response.json())                
-                
+                #     print(response.json())
+
                 match_cnt = 0
                 match_found = False
                 while not match_found and match_cnt < 60:
@@ -246,23 +268,14 @@ class SMPrompt(Cmd):
                     print("Timeout and no opponent found...")
                     continue
                 print("Opponent found...")
-                
+
                 json_data = deck
-                trx = self.stm.custom_json('sm_team_reveal', json_data, required_posting_auths=[acc["name"]])
+                self.stm.custom_json('sm_team_reveal', json_data, required_posting_auths=[acc["name"]])
                 print("sm_team_reveal broadcasted and waiting for results.")
-                stop_time = datetime.utcnow()
-                stop_block = self.b.get_current_block_num()
                 response = ""
-                cnt2 = 0
-                
-                find_match_cnt = 0
-                deck_score = {}
-                cnt = 0
-                
                 sleep(1)
-                response = ""
                 cnt2 = 0
-                
+
                 found_match = False
                 while not found_match and cnt2 < 40:
                     response = requests.get("https://steemmonsters.com/battle/result?id=%s" % deck["trx_id"])
@@ -272,77 +285,121 @@ class SMPrompt(Cmd):
                         sleep(2)
                     else:
                         found_match = True
-                    cnt2 += 1       
-                winning_deck = None
+                    cnt2 += 1
                 if cnt2 == 40:
                     print("Could not found opponent!")
-                    trx = self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
+                    self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
                     sleep(3)
                     continue
                 winner = response.json()["winner"]
                 team1_player = response.json()["player_1"]
                 team2_player = response.json()["player_2"]
+
+                battle_details = json.loads(response.json()["details"])
+                team1 = [{"id": battle_details["team1"]["summoner"]["card_detail_id"], "level": battle_details["team1"]["summoner"]["level"]}]
+                for m in battle_details["team1"]["monsters"]:
+                    team1.append({"id": m["card_detail_id"], "level": m["level"]})
+                team1_player = battle_details["team1"]["player"]
+                team1_str = ""
+                for m in team1:
+                    team1_str += cards[m["id"]]["name"] + ':%d - ' % m["level"]
+                team1_str = team1_str[:-3]
+
+                team2 = [{"id": battle_details["team2"]["summoner"]["card_detail_id"], "level": battle_details["team2"]["summoner"]["level"]}]
+                for m in battle_details["team2"]["monsters"]:
+                    team2.append({"id": m["card_detail_id"], "level": m["level"]})
+                team2_player = battle_details["team2"]["player"]
+                team2_str = ""
+                for m in team2:
+                    team2_str += cards[m["id"]]["name"] + ':%d - ' % m["level"]
+                team2_str = team2_str[:-3]
+
                 if team1_player == winner:
-                    print("match " + colored(team1_player, "green")+" - " + colored(team2_player, "red"))
+                    print("match " + colored(team1_player, "green") + " - " + colored(team2_player, "red"))
                 else:
-                    print("match " + colored(team2_player, "green")+" - " + colored(team1_player, "red"))                
+                    print("match " + colored(team2_player, "green") + " - " + colored(team1_player, "red"))
+
+                if team1_player == acc["name"]:
+                    print("Opponents team: %s" % team2_str)
+                else:
+                    print("Opponents team: %s" % team1_str)
 
                 if winner == acc["name"]:
+                    if statistics["last_match_won"]:
+                        statistics["winning_streak"] += 1
                     statistics["won"] += 1
+                    statistics["loosing_streak"] = 0
+                    statistics["last_match_won"] = True
+                    statistics["last_match_lose"] = False
+                else:
+                    if statistics["last_match_lose"]:
+                        statistics["loosing_streak"] += 1
+                    statistics["winning_streak"] = 0
+                    statistics["last_match_won"] = False
+                    statistics["last_match_lose"] = True
 
                 statistics["battles"] += 1
-                print("%d of %d matches won" % (statistics["won"], statistics["battles"]))
+                print("%d of %d matches won using %s deck" % (statistics["won"], statistics["battles"], inp))
                 if acc["name"] == response.json()["player_1"]:
                     print("Score %d -> %d" % (response.json()["player_1_rating_initial"], response.json()["player_1_rating_final"]))
                 else:
                     print("Score %d -> %d" % (response.json()["player_2_rating_initial"], response.json()["player_2_rating_final"]))
-                
- 
+
     def do_stream(self, inp):
         block_num = self.b.get_current_block_num()
         match_cnt = 0
-        open_match = []
-        reveal_match = []
+        open_match = {}
+        reveal_match = {}
         response = self.api.get_card_details()
         cards = {}
         cards_by_name = {}
         for r in response:
             cards[r["id"]] = r
-            cards_by_name[r["name"]] = r        
+            cards_by_name[r["name"]] = r
         while True:
             match_cnt += 1
-            
+
             response = self.api.get_from_block(block_num)
             for r in response:
                 block_num = r["block_num"]
                 if r["type"] == "sm_find_match":
                     player = r["player"]
+                    player_info = self.api.get_player_details(player)
+                    if not r["success"]:
+                        continue
+
                     data = json.loads(r["data"])
+                    if data["match_type"] != "Ranked":
+                        continue
                     if player not in open_match:
-                        open_match.append(player)
-                        log("%s with summoner_level %d starts searching (%d player searching)" % (player, data["summoner_level"], len(open_match)), color="yellow")
+                        open_match[player] = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": data["mana_cap"], "summoner_level": data["summoner_level"]}
+                        log("%s (%d) with summoner_level %d starts searching (%d player searching)" % (player, player_info["rating"], data["summoner_level"], len(open_match)), color="yellow")
                 elif r["type"] == "sm_team_reveal":
                     result = json.loads(r["result"])
                     player = r["player"]
+
                     if player in open_match:
-                        open_match.remove(player)
+                        player_data = open_match.pop(player)
+                        waiting_time = (block_num - player_data["block_num"]) * 3
+                    else:
+                        waiting_time = 0
+                        player_data = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": data["mana_cap"], "summoner_level": data["summoner_level"]}
                     if player not in reveal_match:
                         if "status" in result and "Waiting for opponent reveal." in result["status"]:
-                            reveal_match.append(player)
-                            log("%s waits for opponent reveal (%d player waiting)" % (player, len(reveal_match)), color="white")
+                            reveal_match[player] = player_data
+                            log("%s waits for opponent reveal after %d s (%d player waiting)" % (player, waiting_time, len(reveal_match)), color="white")
                     else:
                         if "status" in result and "Waiting for opponent reveal." not in result["status"]:
-                            reveal_match.remove(player)
-                    
+                            reveal_match.pop(player)
+
                     if "battle" in result:
-                        players = result["battle"]["players"]
                         team1 = [{"id": result["battle"]["details"]["team1"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team1"]["summoner"]["level"]}]
                         for m in result["battle"]["details"]["team1"]["monsters"]:
                             team1.append({"id": m["card_detail_id"], "level": m["level"]})
                         team1_player = result["battle"]["details"]["team1"]["player"]
                         team1_summoner = result["battle"]["details"]["team1"]["summoner"]
-                        summoner1 = cards[team1_summoner["card_detail_id"]]["name"]+':%d' % team1_summoner["level"]
-            
+                        summoner1 = cards[team1_summoner["card_detail_id"]]["name"] + ':%d' % team1_summoner["level"]
+
                         team2 = [{"id": result["battle"]["details"]["team2"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team2"]["summoner"]["level"]}]
                         for m in result["battle"]["details"]["team2"]["monsters"]:
                             team2.append({"id": m["card_detail_id"], "level": m["level"]})
@@ -351,32 +408,31 @@ class SMPrompt(Cmd):
                         summoner2 = cards[team2_summoner["card_detail_id"]]["name"] + ':%d' % team2_summoner["level"]
                         winner = result["battle"]["details"]["winner"]
                         if team1_player == winner:
-                            print("match " + colored("%s (%s)" % (team1_player, summoner1), "green")+" - " + colored("%s (%s)" % (team2_player, summoner2), "red"))
+                            print("match " + colored("%s (%s)" % (team1_player, summoner1), "green") + " - " + colored("%s (%s)" % (team2_player, summoner2), "red"))
                         else:
-                            print("match " + colored("%s (%s)" % (team2_player, summoner2), "green")+" - " + colored("%s (%s)" % (team1_player, summoner1), "red"))
+                            print("match " + colored("%s (%s)" % (team2_player, summoner2), "green") + " - " + colored("%s (%s)" % (team1_player, summoner1), "red"))
                         if team2_player in open_match:
                             open_match.remove(team2_player)
                         if team1_player in open_match:
                             open_match.remove(team1_player)
                         if team2_player in reveal_match:
-                            reveal_match.remove(team2_player)
+                            reveal_match.pop(team2_player)
                         if team1_player in reveal_match:
-                            reveal_match.remove(team1_player)                             
+                            reveal_match.pop(team1_player)
 
- 
     def help_add(self):
         print("Add a new entry to the system.")
- 
+
     def default(self, inp):
         if inp == 'x' or inp == 'q':
             return self.do_exit(inp)
- 
+
         print("Default: {}".format(inp))
- 
+
     do_EOF = do_exit
     help_EOF = help_exit
- 
- 
+
+
 def main():
     smprompt = SMPrompt()
     smprompt.cmdloop()

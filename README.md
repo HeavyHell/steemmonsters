@@ -62,7 +62,8 @@ beempy addkey
     "play_counter": 1,
     "play_delay": 10,
     "play_inside_ranking_border": false,
-    "ranking_border": [2500, 3000]
+    "ranking_border": [2500, 3000],
+    "stop_on_loosing_streak": 2
 }
 ```
 
@@ -76,3 +77,4 @@ beempy addkey
 * `play_delay`  delay in seconds between two rounds
 * `play_inside_ranking_border`  if true, playing is stopped when outside ranking_border
 * `ranking_border`  continue to play, when inside this border
+* `stop_on_loosing_streak` stops playing when given loosing streak is reached

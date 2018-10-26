@@ -16,7 +16,7 @@ except LookupError:
     ascii = codecs.lookup('ascii')
     codecs.register(lambda name, enc=ascii: {True: enc}.get(name == 'mbcs'))
 
-VERSION = '0.0.10'
+VERSION = '0.0.11'
 
 tests_require = ['mock >= 2.0.0', 'pytest', 'pytest-mock', 'parameterized']
 
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         author='Holger Nahrstaedt',
         author_email='holgernahrstaedt@gmx.de',
         maintainer='Holger Nahrstaedt',
-        maintainer_email='holgernahrstaedt@gmx.de',        
+        maintainer_email='holgernahrstaedt@gmx.de',
         keywords=['steem', 'api', 'steemmonsters'],
         packages=[
             "steemmonsters",

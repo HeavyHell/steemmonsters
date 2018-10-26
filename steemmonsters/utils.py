@@ -9,6 +9,6 @@ def generate_key(length):
 
 def generate_team_hash(summoner, monsters, secret):
     m = hashlib.md5()
-    m.update((summoner+',' + ','.join(monsters)+ ','+secret).encode("utf-8"))
+    m.update((summoner + ',' + ','.join(monsters) + ',' + secret).encode("utf-8"))
     team_hash = m.hexdigest()
     return team_hash
