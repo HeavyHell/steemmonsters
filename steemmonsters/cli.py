@@ -13,6 +13,7 @@ from beem import Steem
 from beem.account import Account
 import argparse
 import json
+import getpass
 import random
 import hashlib
 from datetime import date, datetime, timedelta
@@ -69,10 +70,15 @@ class SMPrompt(Cmd):
     appbase = True
     config_file_name = "config.json"
     sm_config = read_config_json(config_file_name)
+    if "wallet_password" in sm_config:
+        wallet_pass = sm_config["wallet_password"]
+    else:
+        wallet_pass = getpass.getpass(prompt='Enter the beem wallet password.')
     nodes = NodeList()
     nodes.update_nodes()
     nodelist = nodes.get_nodes(normal=normal, appbase=appbase, wss=wss, https=https)
     stm = Steem(node=nodelist, num_retries=5, call_num_retries=3, timeout=15)
+    stm.wallet.unlock(wallet_pass)
     b = Blockchain(mode='head', steem_instance=stm)
 
     def do_exit(self, inp):
@@ -160,7 +166,6 @@ class SMPrompt(Cmd):
         if len(self.sm_config) == 0:
             print("No config file loaded... aborting...")
             return
-        self.stm.wallet.unlock(self.sm_config["wallet_password"])
         acc = Account(self.sm_config["account"], steem_instance=self.stm)
         self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
         print("sm_cancel_match broadcasted!")
@@ -186,7 +191,6 @@ class SMPrompt(Cmd):
                           "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
             play_round = 0
 
-            self.stm.wallet.unlock(self.sm_config["wallet_password"])
             mana_cap = self.sm_config["mana_cap"]
             ruleset = self.sm_config["ruleset"]
             match_type = self.sm_config["match_type"]
@@ -233,7 +237,11 @@ class SMPrompt(Cmd):
                 if play_round > 0 and "play_delay" in self.sm_config:
                     if self.sm_config["play_delay"] >= 1:
                         print("waiting %d seconds" % self.sm_config["play_delay"])
-                        sleep(self.sm_config["play_delay"])
+                        try:
+                            sleep(self.sm_config["play_delay"])
+                        except KeyboardInterrupt:
+                            print("Stop playing...")
+                            return
                 play_round += 1
                 secret = generate_key(10)
                 monsters = []

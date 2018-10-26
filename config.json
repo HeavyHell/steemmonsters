@@ -1,15 +1,23 @@
 {
-    "wallet_password": "pwd123",
     "account": "holger80",
-    "mana_cap": 19,
-    "ruleset": "Lost Legendaries",
+    "mana_cap": 22,
+    "ruleset": "Silenced Summoners",
     "match_type": "Ranked",
     "decks": {
-                "water1": ["Alric Stormbringer", "Spineback Turtle", "Medusa", "Crustacean King", "Mischievous Mermaid"]
-
+                "fire1": ["Malric Inferno", "Kobold Miner", "Elemental Phoenix", "Goblin Shaman", "Fire Demon", "Fire Beetle"],
+                "water1": ["Alric Stormbringer", "Naga Warrior", "Cocatrice", "Medusa", "Crustacean King", "Mischievous Mermaid"],
+                "water2": ["Naga Warrior", "Pirate Captain", "Mischievous Mermaid", "Sabre Shark", "Crustacean King"],
+                "fire2": ["Malric Inferno", "Serpentine Soldier", "Elemental Phoenix", "Goblin Shaman", "Fire Demon"],
+                "death1": ["Zintar Mortalis", "Haunted Spirit","Skeleton Assassin", "Undead Priest", "Dark Enchantress", "Haunted Spider"],
+                "light1": ["Tyrus Paladium", "Silvershield Paladin", "Feral Spirit", "Divine Healer", "Defender of Truth", "Peacebringer"],
+                "light2": ["Tyrus Paladium", "Feral Spirit", "Divine Healer", "Peacebringer", "Defender of Truth", "Air Elemental"],
+                "earth1": ["Lyanna Natura","Flesh Golem", "Earth Elemental","Swamp Thing","Spirit of the Forest"],
+                "earth2": ["Lyanna Natura","Flesh Golem","Swamp Thing","Magi of the Forest", "Spirit of the Forest"],
+                "dragon": ["Selenia Sky", "Naga Warrior", "Gold Dragon", "Crustacean King", "Medusa"]
     },
-    "play_counter": -1,
-    "play_delay": 10,
-    "play_inside_ranking_border": true,
-    "ranking_border": [2900, 3200]
+    "play_counter": 20,
+    "play_delay": 5,
+    "stop_on_loosing_streak": 2,
+    "play_inside_ranking_border": false,
+    "ranking_border": [2800, 3000]
 }
