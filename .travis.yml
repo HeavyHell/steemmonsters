@@ -60,7 +60,7 @@ before_install:
   - pip install six nose coverage codecov tox-travis pytest pytest-cov coveralls codacy-coverage parameterized secp256k1 cryptography scrypt
   - pip install pycryptodomex  pyyaml appdirs pylibscrypt
   - pip install ecdsa requests future websocket-client pytz six Click events prettytable
-  - pip install beem, colorama, termcolor
+  - pip install beem colorama termcolor
 
 script:
  - tox
