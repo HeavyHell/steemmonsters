@@ -11,17 +11,23 @@ from beem.blockchain import Blockchain
 from beem.nodelist import NodeList
 from beem import Steem
 from beem.account import Account
+import argparse
 import json
 import random
 import hashlib
 from datetime import date, datetime, timedelta
 import requests
 import logging
+import os
+from os.path import exists
+from os.path import expanduser
 import math
 import six
 from time import sleep
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logging.basicConfig()
 
 try:
     import colorama
@@ -40,9 +46,18 @@ def log(string, color, font="slant"):
     six.print_(colored(string, color))
 
 
+def read_config_json(config_json):
+    if not exists(config_json):
+        print("Could not find config json: %s" % config_json)
+        sm_config = {}
+    else:
+        sm_config = json.loads(open(config_json).read())
+    return sm_config
+
+
 class SMPrompt(Cmd):
     prompt = 'sm> '
-    intro = "Welcome! Type ? to list commands"
+    intro = "Welcome to steemmonsters! Type ? to list commands"
     account = ""
     wallet_pass = ""
     api = Api()
@@ -52,13 +67,8 @@ class SMPrompt(Cmd):
     https = True
     normal = False
     appbase = True
-    log = logging.getLogger(__name__)
-    verbosity = ["critical", "error", "warn", "info", "debug"][1]
-    log.setLevel(getattr(logging, verbosity.upper()))
-
-    with open('config.json', 'r') as f:
-        sm_config = json.load(f)
-
+    config_file_name = "config.json"
+    sm_config = read_config_json(config_file_name)
     nodes = NodeList()
     nodes.update_nodes()
     nodelist = nodes.get_nodes(normal=normal, appbase=appbase, wss=wss, https=https)
@@ -69,6 +79,10 @@ class SMPrompt(Cmd):
         print("Bye")
         return True
 
+    def do_quit(self, inp):
+        print("Bye")
+        return True
+
     def help_exit(self):
         print('exit the application. Shorthand: x q Ctrl-D.')
 
@@ -76,34 +90,62 @@ class SMPrompt(Cmd):
         self.account = inp
         print("setting '{}'".format(inp))
 
+    def help_set_account(self):
+        print("changes the account name")
+
     def do_set_wallet_password(self, inp):
         print("wallet password stored")
         self.wallet_pass = inp
 
+    def help_set_wallet_password(self):
+        print("changes the wallet password")
+
     def do_reload_config(self, inp):
         if inp == "":
-            inp = "config.json"
-        with open(inp, 'r') as f:
-            self.sm_config = json.load(f)
+            inp = self.config_file_name
+        else:
+            self.config_file_name = inp
+        self.sm_config = read_config_json(inp)
+
+    def help_reload_config(self):
+        print("Reloads the config, a new config files can be given as parameter")
 
     def do_show_config(self, inp):
         tx = json.dumps(self.sm_config, indent=4)
         print(tx)
 
+    def help_show_config(self):
+        print("Shows the loaded config file")
+
     def do_show_cards(self, inp):
         if inp == "":
+            if len(self.sm_config) == 0:
+                print("No config file loaded... aborting...")
+                return
             cards = self.api.get_collection(self.sm_config["account"])
         else:
             cards = self.api.get_collection(inp)
         tx = json.dumps(cards, indent=4)
         print(tx)
 
+    def help_show_cards(self):
+        print("Shows the owned cards, an account name can be given as parameter")
+
     def do_show_deck(self, inp):
-        tx = json.dumps(self.sm_config["decks"][inp], indent=4)
-        print(tx)
+        if "decks" not in self.sm_config:
+            print("No decks defined.")
+        else:
+            tx = json.dumps(self.sm_config["decks"][inp], indent=4)
+            print(tx)
+
+    def help_show_deck(self):
+        print("Shows defined deck for given identifier")
 
     def do_ranking(self, inp):
         if inp == "":
+            if len(self.sm_config) == 0:
+                print("No config file loaded... aborting...")
+                return
             account = self.sm_config["account"]
         else:
             account = inp
@@ -111,14 +153,26 @@ class SMPrompt(Cmd):
         tx = json.dumps(response, indent=4)
         print(tx)
 
+    def help_ranking(self):
+        print("Shows ranking, a account name can also be given.")
+
     def do_cancel(self, inp):
+        if len(self.sm_config) == 0:
+            print("No config file loaded... aborting...")
+            return
         self.stm.wallet.unlock(self.sm_config["wallet_password"])
         acc = Account(self.sm_config["account"], steem_instance=self.stm)
         self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
         print("sm_cancel_match broadcasted!")
         sleep(3)
 
+    def help_cancel(self):
+        print("Broadcasts a custom_json with sm_cancel_match")
+
     def do_play(self, inp):
+        if len(self.sm_config) == 0:
+            print("No config file loaded... aborting...")
+            return
         if inp == "":
             inp = "random"
         if inp != "random" and inp not in self.sm_config["decks"]:
@@ -207,7 +261,7 @@ class SMPrompt(Cmd):
 
                 team_hash = generate_team_hash(deck["summoner"], deck["monsters"], deck["secret"])
                 json_data = {"match_type": match_type, "mana_cap": mana_cap, "team_hash": team_hash, "summoner_level": summoner_level, "ruleset": ruleset}
-                trx = self.stm.custom_json('sm_find_match', json_data, required_posting_auths=[acc["name"]])
+                self.stm.custom_json('sm_find_match', json_data, required_posting_auths=[acc["name"]])
                 print("sm_find_match broadcasted...")
                 sleep(3)
                 found = False
@@ -226,7 +280,7 @@ class SMPrompt(Cmd):
                 block_num = h["block_num"]
                 print("Transaction id found (%d - %s)" % (block_num, deck["trx_id"]))
                 if not found:
-                    trx = self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
+                    self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
                     sleep(3)
                     continue
 
@@ -345,6 +399,9 @@ class SMPrompt(Cmd):
                 else:
                     print("Score %d -> %d" % (response.json()["player_2_rating_initial"], response.json()["player_2_rating_final"]))
 
+    def help_play(self):
+        print("Starts playing with given deck")
+
     def do_stream(self, inp):
         block_num = self.b.get_current_block_num()
         match_cnt = 0
@@ -383,7 +440,11 @@ class SMPrompt(Cmd):
                         waiting_time = (block_num - player_data["block_num"]) * 3
                     else:
                         waiting_time = 0
-                        player_data = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": data["mana_cap"], "summoner_level": data["summoner_level"]}
+                        if "battle" in result:
+                            mana_cap = result["battle"]["mana_cap"]
+                        else:
+                            mana_cap = 0
+                        player_data = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": mana_cap, "summoner_level": 0}
                     if player not in reveal_match:
                         if "status" in result and "Waiting for opponent reveal." in result["status"]:
                             reveal_match[player] = player_data
@@ -420,8 +481,8 @@ class SMPrompt(Cmd):
                         if team1_player in reveal_match:
                             reveal_match.pop(team1_player)
 
-    def help_add(self):
-        print("Add a new entry to the system.")
+    def help_stream(self):
+        print("Shows who is currently playing.")
 
     def default(self, inp):
         if inp == 'x' or inp == 'q':
@@ -434,7 +495,12 @@ class SMPrompt(Cmd):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config")
+    args = parser.parse_args()
     smprompt = SMPrompt()
+    if args.config:
+        smprompt.do_reload_config(args.config)
     smprompt.cmdloop()
 
 
