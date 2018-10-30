@@ -300,8 +300,15 @@ class SMPrompt(Cmd):
                     if str(response) != '<Response [200]>':
                         sleep(2)
                     else:
-                        if "trx_info" in response.json() and response.json()["trx_info"]["success"]:
-                            trx_found = True
+                        if 'error' in response.json():
+                            if "The current player is already looking for a match." in response.json()["error"]:
+                                trx_found = True
+                            else:
+                                sleep(1)
+                        elif "trx_info" in response.json() and response.json()["trx_info"]["success"]:
+                            trx_found = True                  
+                        else:
+                            sleep(1)
                         # elif 'error' in response.json():
                         #    print(response.json()["error"])
                     cnt2 += 1
