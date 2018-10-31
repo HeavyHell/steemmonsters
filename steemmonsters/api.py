@@ -57,6 +57,14 @@ class Api(object):
             cnt2 += 1
         return response.json()
 
+    def get_player_quests(self, player):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "players/quests?username=%s" % player)
+            cnt2 += 1
+        return response.json()
+
     def get_for_sale(self):
         response = ""
         cnt2 = 0
@@ -72,6 +80,16 @@ class Api(object):
         cnt2 = 0
         while str(response) != '<Response [200]>' and cnt2 < 10:
             response = requests.get(self.__url__ + "purchases/settings")
+            if str(response) != '<Response [200]>':
+                time.sleep(2)
+            cnt2 += 1
+        return response.json()
+
+    def get_purchases_status(self, uuid):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "purchases/status?id=%s" % uuid)
             if str(response) != '<Response [200]>':
                 time.sleep(2)
             cnt2 += 1

@@ -47,9 +47,10 @@ def log(string, color, font="slant"):
     six.print_(colored(string, color))
 
 
-def read_config_json(config_json):
+def read_config_json(config_json, verbose=True):
     if not exists(config_json):
-        print("Could not find config json: %s" % config_json)
+        if verbose:
+            print("Could not find config json: %s" % config_json)
         sm_config = {}
     else:
         sm_config = json.loads(open(config_json).read())
@@ -69,7 +70,7 @@ class SMPrompt(Cmd):
     normal = False
     appbase = True
     config_file_name = "config.json"
-    sm_config = read_config_json(config_file_name)
+    sm_config = read_config_json(config_file_name, verbose=False)
     if "wallet_password" in sm_config:
         wallet_pass = sm_config["wallet_password"]
     else:
@@ -161,6 +162,21 @@ class SMPrompt(Cmd):
 
     def help_ranking(self):
         print("Shows ranking, a account name can also be given.")
+
+    def do_quest(self, inp):
+        if inp == "":
+            if len(self.sm_config) == 0:
+                print("No config file loaded... aborting...")
+                return
+            account = self.sm_config["account"]
+        else:
+            account = inp
+        response = self.api.get_player_quests(account)
+        tx = json.dumps(response, indent=4)
+        print(tx)
+
+    def help_quest(self):
+        print("Shows quest, a account name can also be given.")
 
     def do_cancel(self, inp):
         if len(self.sm_config) == 0:
@@ -488,9 +504,9 @@ class SMPrompt(Cmd):
                         else:
                             print("match " + colored("%s (%s)" % (team2_player, summoner2), "green") + " - " + colored("%s (%s)" % (team1_player, summoner1), "red"))
                         if team2_player in open_match:
-                            open_match.remove(team2_player)
+                            open_match.pop(team2_player)
                         if team1_player in open_match:
-                            open_match.remove(team1_player)
+                            open_match.pop(team1_player)
                         if team2_player in reveal_match:
                             reveal_match.pop(team2_player)
                         if team1_player in reveal_match:
