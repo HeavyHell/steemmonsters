@@ -557,8 +557,8 @@ class SMPrompt(Cmd):
                       "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
         play_round = 0
 
-        mana_cap = mana_cap = self.settings["ranked_settings"]["mana_cap"]
-        ruleset = mana_cap = self.settings["ranked_settings"]["ruleset"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        ruleset = self.settings["ranked_settings"]["ruleset"]
         match_type = self.sm_config["match_type"]
 
         acc = Account(self.sm_config["account"], steem_instance=self.stm)
@@ -673,10 +673,7 @@ class SMPrompt(Cmd):
                     sleep(1)
                 else:
                     if 'error' in response.json():
-                        if "The current player is already looking for a match." in response.json()["error"]:
-                            trx_found = True
-                        else:
-                            sleep(1)
+                        trx_found = True
                     elif "trx_info" in response.json() and response.json()["trx_info"]["success"]:
                         trx_found = True
                     else:
