@@ -672,8 +672,14 @@ class SMPrompt(Cmd):
                 if str(response) != '<Response [200]>':
                     sleep(1)
                 else:
-                    if 'error' in response.json():
-                        trx_found = True
+                    if 'error' in response.json() and "not found" in response.json()["error"]:
+                        try:
+                            sleep(1)
+                        except KeyboardInterrupt:
+                            print("Exiting cleanly...")
+                            return
+                    elif 'error' in response.json():
+                        trx_found = True                    
                     elif "trx_info" in response.json() and response.json()["trx_info"]["success"]:
                         trx_found = True
                     else:
