@@ -706,7 +706,7 @@ class SMPrompt(Cmd):
             while not match_found and match_cnt < 60:
                 match_cnt += 1
                 response = self.api.get_battle_status(deck["trx_id"])
-                if "status" in response and response["status"] > 0:
+                if "status" in response and response["status"] > 0 and response["status"] < 3:
                     match_found = True
                 sleep(1)
                 # print("open %s" % str(open_match))
@@ -722,11 +722,16 @@ class SMPrompt(Cmd):
             print("sm_team_reveal broadcasted and waiting for results.")
             response = ""
             try:
-                sleep(1)
+                sleep(3)
             except KeyboardInterrupt:
                 print("Exiting cleanly...")
                 return
             cnt2 = 0
+            
+            response = self.api.get_battle_status(deck["trx_id"])
+            if "reveal_tx" in response and response["reveal_tx"] == null:
+                print("Error broadcasting reveal team. Check your teams for validity.")
+                return
 
             found_match = False
             while not found_match and cnt2 < 40:
