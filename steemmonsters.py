@@ -188,7 +188,7 @@ class SMPrompt(Cmd):
                 print("Could not find %s in saved decks" % inp)
                 return
         else:
-            deck_ids = self.sm_config["decks"][inp]            
+            deck_ids = self.sm_config["decks"][inp]
         tx = json.dumps(deck_ids, indent=4)
         print(tx)
 
@@ -220,7 +220,7 @@ class SMPrompt(Cmd):
             account = inp
         response = self.api.get_player_quests(account)
         if isinstance(response, list) and len(response) == 1:
-            response = response[0]        
+            response = response[0]
         print("Current quest: %s" % response["name"])
         if response["claim_trx_id"] is None:
             print("Current quest is not completed (%d / %d)" % (response["completed_items"], response["total_items"]))
@@ -657,7 +657,7 @@ class SMPrompt(Cmd):
                 sleep(3)
             except KeyboardInterrupt:
                 print("Exiting cleanly...")
-                return            
+                return
             found = False
             start_block_num = None
             for h in self.b.stream(opNames=["custom_json"]):
@@ -697,7 +697,7 @@ class SMPrompt(Cmd):
                             print("Exiting cleanly...")
                             return
                     elif 'error' in response.json():
-                        trx_found = True                    
+                        trx_found = True
                     elif "trx_info" in response.json() and response.json()["trx_info"]["success"]:
                         trx_found = True
                     else:
@@ -740,16 +740,11 @@ class SMPrompt(Cmd):
             print("sm_team_reveal broadcasted and waiting for results.")
             response = ""
             try:
-                sleep(3)
+                sleep(2)
             except KeyboardInterrupt:
                 print("Exiting cleanly...")
                 return
             cnt2 = 0
-            
-            response = self.api.get_battle_status(deck["trx_id"])
-            if "reveal_tx" in response and response["reveal_tx"] is None:
-                print("Error broadcasting reveal team. Check your teams for validity.")
-                return
 
             found_match = False
             while not found_match and cnt2 < 40:
@@ -759,18 +754,22 @@ class SMPrompt(Cmd):
                         sleep(2)
                     except KeyboardInterrupt:
                         print("Exiting cleanly...")
-                        return                    
+                        return
                 elif 'Error' in response.json():
                     try:
                         sleep(2)
                     except KeyboardInterrupt:
                         print("Exiting cleanly...")
-                        return                    
+                        return
                 else:
                     found_match = True
                 cnt2 += 1
             if cnt2 == 40:
                 print("Could not found opponent!")
+                response = self.api.get_battle_status(deck["trx_id"])
+                if "reveal_tx" in response and response["reveal_tx"] is None:
+                    print("Error broadcasting sm_team_reveal. Check your teams for validity (Summoners must be included).")
+                    return
                 self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
                 sleep(3)
                 continue
@@ -786,7 +785,7 @@ class SMPrompt(Cmd):
             team1_str = ""
             for m in team1:
                 team1_str += self.cards[m["id"]]["name"] + ':%d, ' % m["level"]
-            team1_str = team1_str[:-3]
+            team1_str = team1_str[:-2]
 
             team2 = [{"id": battle_details["team2"]["summoner"]["card_detail_id"], "level": battle_details["team2"]["summoner"]["level"]}]
             for m in battle_details["team2"]["monsters"]:
@@ -795,7 +794,7 @@ class SMPrompt(Cmd):
             team2_str = ""
             for m in team2:
                 team2_str += self.cards[m["id"]]["name"] + ':%d, ' % m["level"]
-            team2_str = team2_str[:-3]
+            team2_str = team2_str[:-2]
 
             if team1_player == winner:
                 print("match " + colored(team1_player, "green") + " - " + colored(team2_player, "red"))
@@ -843,7 +842,7 @@ class SMPrompt(Cmd):
         while True:
             try:
                 match_cnt += 1
-    
+
                 response = self.api.get_from_block(block_num)
                 for r in response:
                     block_num = r["block_num"]
@@ -852,7 +851,7 @@ class SMPrompt(Cmd):
                         player_info = self.api.get_player_details(player)
                         if not r["success"]:
                             continue
-    
+
                         data = json.loads(r["data"])
                         if data["match_type"] != "Ranked":
                             continue
@@ -862,7 +861,7 @@ class SMPrompt(Cmd):
                     elif r["type"] == "sm_team_reveal":
                         result = json.loads(r["result"])
                         player = r["player"]
-    
+
                         if player in open_match:
                             player_data = open_match.pop(player)
                             waiting_time = (block_num - player_data["block_num"]) * 3
@@ -880,7 +879,7 @@ class SMPrompt(Cmd):
                         else:
                             if "status" in result and "Waiting for opponent reveal." not in result["status"]:
                                 reveal_match.pop(player)
-    
+
                         if "battle" in result:
                             team1 = [{"id": result["battle"]["details"]["team1"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team1"]["summoner"]["level"]}]
                             for m in result["battle"]["details"]["team1"]["monsters"]:
@@ -888,7 +887,7 @@ class SMPrompt(Cmd):
                             team1_player = result["battle"]["details"]["team1"]["player"]
                             team1_summoner = result["battle"]["details"]["team1"]["summoner"]
                             summoner1 = self.cards[team1_summoner["card_detail_id"]]["name"] + ':%d' % team1_summoner["level"]
-    
+
                             team2 = [{"id": result["battle"]["details"]["team2"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team2"]["summoner"]["level"]}]
                             for m in result["battle"]["details"]["team2"]["monsters"]:
                                 team2.append({"id": m["card_detail_id"], "level": m["level"]})
