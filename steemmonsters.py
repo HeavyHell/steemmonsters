@@ -747,7 +747,7 @@ class SMPrompt(Cmd):
             cnt2 = 0
             
             response = self.api.get_battle_status(deck["trx_id"])
-            if "reveal_tx" in response and response["reveal_tx"] == null:
+            if "reveal_tx" in response and response["reveal_tx"] is None:
                 print("Error broadcasting reveal team. Check your teams for validity.")
                 return
 
