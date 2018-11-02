@@ -528,7 +528,11 @@ class SMPrompt(Cmd):
             json_data = {"match_type": match_type, "mana_cap": mana_cap, "team_hash": team_hash, "summoner_level": summoner_level, "ruleset": ruleset}
             self.stm.custom_json('sm_find_match', json_data, required_posting_auths=[acc["name"]])
             print("sm_find_match broadcasted...")
-            sleep(3)
+            try:
+                sleep(3)
+            except KeyboardInterrupt:
+                print("Exiting cleanly...")
+                return            
             found = False
             start_block_num = None
             for h in self.b.stream(opNames=["custom_json"]):
@@ -546,7 +550,11 @@ class SMPrompt(Cmd):
             print("Transaction id found (%d - %s)" % (block_num, deck["trx_id"]))
             if not found:
                 self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
-                sleep(3)
+                try:
+                    sleep(3)
+                except KeyboardInterrupt:
+                    print("Exiting cleanly...")
+                    return
                 continue
 
             response = ""
@@ -563,7 +571,7 @@ class SMPrompt(Cmd):
                         else:
                             sleep(1)
                     elif "trx_info" in response.json() and response.json()["trx_info"]["success"]:
-                        trx_found = True                  
+                        trx_found = True
                     else:
                         sleep(1)
                     # elif 'error' in response.json():
@@ -573,7 +581,11 @@ class SMPrompt(Cmd):
                 print(response.json()["error"])
                 if "The current player is already looking for a match." in response.json()["error"]:
                     self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
-                    sleep(3)
+                    try:
+                        sleep(3)
+                    except KeyboardInterrupt:
+                        print("Exiting cleanly...")
+                        return
                 break
             else:
                 print("Transaction is valid...")
@@ -599,7 +611,11 @@ class SMPrompt(Cmd):
             self.stm.custom_json('sm_team_reveal', json_data, required_posting_auths=[acc["name"]])
             print("sm_team_reveal broadcasted and waiting for results.")
             response = ""
-            sleep(1)
+            try:
+                sleep(1)
+            except KeyboardInterrupt:
+                print("Exiting cleanly...")
+                return
             cnt2 = 0
 
             found_match = False
@@ -646,8 +662,10 @@ class SMPrompt(Cmd):
                 print("match " + colored(team2_player, "green") + " - " + colored(team1_player, "red"))
 
             if team1_player == acc["name"]:
+                print("Opponent ranking: %d" % response.json()["player_2_rating_initial"])
                 print("Opponents team: %s" % team2_str)
             else:
+                print("Opponent ranking: %d" % response.json()["player_1_rating_initial"])
                 print("Opponents team: %s" % team1_str)
 
             if winner == acc["name"]:
@@ -682,72 +700,76 @@ class SMPrompt(Cmd):
         reveal_match = {}
 
         while True:
-            match_cnt += 1
-
-            response = self.api.get_from_block(block_num)
-            for r in response:
-                block_num = r["block_num"]
-                if r["type"] == "sm_find_match":
-                    player = r["player"]
-                    player_info = self.api.get_player_details(player)
-                    if not r["success"]:
-                        continue
-
-                    data = json.loads(r["data"])
-                    if data["match_type"] != "Ranked":
-                        continue
-                    if player not in open_match:
-                        open_match[player] = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": data["mana_cap"], "summoner_level": data["summoner_level"]}
-                        log("%s (%d) with summoner_level %d starts searching (%d player searching)" % (player, player_info["rating"], data["summoner_level"], len(open_match)), color="yellow")
-                elif r["type"] == "sm_team_reveal":
-                    result = json.loads(r["result"])
-                    player = r["player"]
-
-                    if player in open_match:
-                        player_data = open_match.pop(player)
-                        waiting_time = (block_num - player_data["block_num"]) * 3
-                    else:
-                        waiting_time = 0
+            try:
+                match_cnt += 1
+    
+                response = self.api.get_from_block(block_num)
+                for r in response:
+                    block_num = r["block_num"]
+                    if r["type"] == "sm_find_match":
+                        player = r["player"]
+                        player_info = self.api.get_player_details(player)
+                        if not r["success"]:
+                            continue
+    
+                        data = json.loads(r["data"])
+                        if data["match_type"] != "Ranked":
+                            continue
+                        if player not in open_match:
+                            open_match[player] = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": data["mana_cap"], "summoner_level": data["summoner_level"]}
+                            log("%s (%d) with summoner_level %d starts searching (%d player searching)" % (player, player_info["rating"], data["summoner_level"], len(open_match)), color="yellow")
+                    elif r["type"] == "sm_team_reveal":
+                        result = json.loads(r["result"])
+                        player = r["player"]
+    
+                        if player in open_match:
+                            player_data = open_match.pop(player)
+                            waiting_time = (block_num - player_data["block_num"]) * 3
+                        else:
+                            waiting_time = 0
+                            if "battle" in result:
+                                mana_cap = result["battle"]["mana_cap"]
+                            else:
+                                mana_cap = 0
+                            player_data = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": mana_cap, "summoner_level": 0}
+                        if player not in reveal_match:
+                            if "status" in result and "Waiting for opponent reveal." in result["status"]:
+                                reveal_match[player] = player_data
+                                log("%s waits for opponent reveal after %d s (%d player waiting)" % (player, waiting_time, len(reveal_match)), color="white")
+                        else:
+                            if "status" in result and "Waiting for opponent reveal." not in result["status"]:
+                                reveal_match.pop(player)
+    
                         if "battle" in result:
-                            mana_cap = result["battle"]["mana_cap"]
-                        else:
-                            mana_cap = 0
-                        player_data = {"type": r["type"], "block_num": block_num, "player": player, "mana_cap": mana_cap, "summoner_level": 0}
-                    if player not in reveal_match:
-                        if "status" in result and "Waiting for opponent reveal." in result["status"]:
-                            reveal_match[player] = player_data
-                            log("%s waits for opponent reveal after %d s (%d player waiting)" % (player, waiting_time, len(reveal_match)), color="white")
-                    else:
-                        if "status" in result and "Waiting for opponent reveal." not in result["status"]:
-                            reveal_match.pop(player)
-
-                    if "battle" in result:
-                        team1 = [{"id": result["battle"]["details"]["team1"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team1"]["summoner"]["level"]}]
-                        for m in result["battle"]["details"]["team1"]["monsters"]:
-                            team1.append({"id": m["card_detail_id"], "level": m["level"]})
-                        team1_player = result["battle"]["details"]["team1"]["player"]
-                        team1_summoner = result["battle"]["details"]["team1"]["summoner"]
-                        summoner1 = self.cards[team1_summoner["card_detail_id"]]["name"] + ':%d' % team1_summoner["level"]
-
-                        team2 = [{"id": result["battle"]["details"]["team2"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team2"]["summoner"]["level"]}]
-                        for m in result["battle"]["details"]["team2"]["monsters"]:
-                            team2.append({"id": m["card_detail_id"], "level": m["level"]})
-                        team2_player = result["battle"]["details"]["team2"]["player"]
-                        team2_summoner = result["battle"]["details"]["team2"]["summoner"]
-                        summoner2 = self.cards[team2_summoner["card_detail_id"]]["name"] + ':%d' % team2_summoner["level"]
-                        winner = result["battle"]["details"]["winner"]
-                        if team1_player == winner:
-                            print("match " + colored("%s (%s)" % (team1_player, summoner1), "green") + " - " + colored("%s (%s)" % (team2_player, summoner2), "red"))
-                        else:
-                            print("match " + colored("%s (%s)" % (team2_player, summoner2), "green") + " - " + colored("%s (%s)" % (team1_player, summoner1), "red"))
-                        if team2_player in open_match:
-                            open_match.pop(team2_player)
-                        if team1_player in open_match:
-                            open_match.pop(team1_player)
-                        if team2_player in reveal_match:
-                            reveal_match.pop(team2_player)
-                        if team1_player in reveal_match:
-                            reveal_match.pop(team1_player)
+                            team1 = [{"id": result["battle"]["details"]["team1"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team1"]["summoner"]["level"]}]
+                            for m in result["battle"]["details"]["team1"]["monsters"]:
+                                team1.append({"id": m["card_detail_id"], "level": m["level"]})
+                            team1_player = result["battle"]["details"]["team1"]["player"]
+                            team1_summoner = result["battle"]["details"]["team1"]["summoner"]
+                            summoner1 = self.cards[team1_summoner["card_detail_id"]]["name"] + ':%d' % team1_summoner["level"]
+    
+                            team2 = [{"id": result["battle"]["details"]["team2"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team2"]["summoner"]["level"]}]
+                            for m in result["battle"]["details"]["team2"]["monsters"]:
+                                team2.append({"id": m["card_detail_id"], "level": m["level"]})
+                            team2_player = result["battle"]["details"]["team2"]["player"]
+                            team2_summoner = result["battle"]["details"]["team2"]["summoner"]
+                            summoner2 = self.cards[team2_summoner["card_detail_id"]]["name"] + ':%d' % team2_summoner["level"]
+                            winner = result["battle"]["details"]["winner"]
+                            if team1_player == winner:
+                                print("match " + colored("%s (%s)" % (team1_player, summoner1), "green") + " - " + colored("%s (%s)" % (team2_player, summoner2), "red"))
+                            else:
+                                print("match " + colored("%s (%s)" % (team2_player, summoner2), "green") + " - " + colored("%s (%s)" % (team1_player, summoner1), "red"))
+                            if team2_player in open_match:
+                                open_match.pop(team2_player)
+                            if team1_player in open_match:
+                                open_match.pop(team1_player)
+                            if team2_player in reveal_match:
+                                reveal_match.pop(team2_player)
+                            if team1_player in reveal_match:
+                                reveal_match.pop(team1_player)
+            except KeyboardInterrupt:
+                print("Exiting cleanly...")
+                return
 
     def help_stream(self):
         print("Shows who is currently playing.")
