@@ -54,8 +54,6 @@ beempy addkey
 {
     "wallet_password": "123",
     "account": "holger80",
-    "mana_cap": 23,
-    "ruleset": "Standard",
     "match_type": "Ranked",
     "decks": {
                 "death1": ["Zintar Mortalis", "Haunted Spirit", "Skeleton Assassin", "Twisted Jester", "Haunted Spider", "Screaming Banshee", "Undead Priest"],
@@ -72,8 +70,6 @@ beempy addkey
 
 * `wallet_password` is the `beempy` wallet password
 * `account`: steem user name of the player
-* `mana_cap`: current mana cap
-* `ruleset`: current rule set
 * `match_type`: match type
 * `decks` contains the different pre defined decks. There is no mana_cap check
 * `play_counter`  how often a deck is played, -1 means play foreever

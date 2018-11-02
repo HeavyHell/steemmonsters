@@ -69,6 +69,7 @@ class SMPrompt(Cmd):
     account = ""
     wallet_pass = ""
     api = Api()
+    settings = api.settings()
     max_batch_size = 50
     threading = False
     wss = False
@@ -149,15 +150,50 @@ class SMPrompt(Cmd):
     def help_show_cards(self):
         print("Shows the owned cards, an account name can be given as parameter")
 
-    def do_show_deck(self, inp):
-        if "decks" not in self.sm_config:
-            print("No decks defined.")
-        else:
-            tx = json.dumps(self.sm_config["decks"][inp], indent=4)
-            print(tx)
+    def do_conflict(self, inp):
+        self.settings = self.api.settings()
+        ranked_settings = self.settings["ranked_settings"]
+        tx = json.dumps(ranked_settings, indent=4)
+        print(tx)
 
-    def help_show_deck(self):
-        print("Shows defined deck for given identifier")
+    def help_conflict(self):
+        print("Show current conflict")
+
+    def do_team(self, inp):
+        if inp not in self.sm_config["decks"]:
+            account = self.sm_config["account"]
+            mana_cap = self.settings["ranked_settings"]["mana_cap"]
+            response = self.api.get_player_login(account)
+            acc = Account(account, steem_instance=self.stm)
+            wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+            token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+            response = self.api.get_player_saved_teams(account, token, mana_cap)
+            decks = {}
+            for r in response:
+                summoner = r["summoner"]
+                monsters = r["monsters"]
+                monsters_list = []
+                for m in monsters:
+                    card_name = self.cards[m["id"]]["name"]
+                    if m["gold"]:
+                        card_name += ":gold"
+                    monsters_list.append(card_name)
+                summoner_name = self.cards[summoner["id"]]["name"]
+                if summoner["gold"]:
+                    summoner_name += ":gold"
+                decks[r["name"]] = [summoner_name] + monsters_list
+            if inp in decks:
+                deck_ids = decks[inp]
+            else:
+                print("Could not find %s in saved decks" % inp)
+                return
+        else:
+            deck_ids = self.sm_config["decks"][inp]            
+        tx = json.dumps(deck_ids, indent=4)
+        print(tx)
+
+    def help_team(self):
+        print("Shows defined team for given identifier")
 
     def do_ranking(self, inp):
         if inp == "":
@@ -189,6 +225,21 @@ class SMPrompt(Cmd):
     def help_quest(self):
         print("Shows quest, a account name can also be given.")
 
+    def do_player(self, inp):
+        if inp == "":
+            if len(self.sm_config) == 0:
+                print("No config file loaded... aborting...")
+                return
+            account = self.sm_config["account"]
+        else:
+            account = inp
+        response = self.api.get_player_details(account)
+        tx = json.dumps(response, indent=4)
+        print(tx)
+
+    def help_player(self):
+        print("Shows player, a account name can also be given.")
+
     def do_lastteam(self, inp):
         if inp == "":
             if len(self.sm_config) == 0:
@@ -197,7 +248,7 @@ class SMPrompt(Cmd):
             account = self.sm_config["account"]
         else:
             account = inp
-        mana_cap = self.sm_config["mana_cap"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_teams_last_used(account, mana_cap)
         if len(response) == 0:
             print("Error in loading last team...")
@@ -213,13 +264,43 @@ class SMPrompt(Cmd):
     def help_lastteam(self):
         print("Shows quest, a account name can also be given.")
 
-    def do_copyteam(self, inp):
+    def do_lasttopteam(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                return
-        account = inp.split(' ')[0]
-        deck_name = inp[len(account) + 1:]
-        mana_cap = self.sm_config["mana_cap"]
+            print("Give a number between 1 and 100")
+            return
+        elif int(inp) < 1 or int(inp) > 100:
+            print("Give a number between 1 and 100")
+            return
+        leaderboard = self.api.players_leaderboard()
+        account = leaderboard[int(inp) - 1]["player"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        response = self.api.get_player_teams_last_used(account, mana_cap)
+        if len(response) == 0:
+            print("Error in loading last team...")
+            return
+        summoner = response["summoner"]
+        monsters = response["monsters"]
+        monsters_list = []
+        for m in monsters:
+            monsters_list.append(self.cards[m["id"]]["name"])
+        deck = ", ".join([self.cards[summoner["id"]]["name"]] + monsters_list)
+        print(deck)
+
+    def help_lasttopteam(self):
+        print("Shows last played team from the top, a account name can also be given.")
+
+    def do_copytopteam(self, inp):
+        if inp == "":
+            print("Give a number between 1 and 100")
+            return
+        account_number = inp.split(' ')[0]
+        if int(account_number) < 1 or int(account_number) > 100:
+            print("Give a number between 1 and 100")
+            return
+        leaderboard = self.api.players_leaderboard()
+        account = leaderboard[int(account_number) - 1]["player"]
+        deck_name = inp[len(account_number) + 1:]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_teams_last_used(account, mana_cap)
         if len(response) == 0:
             print("Error in loading last team...")
@@ -232,7 +313,34 @@ class SMPrompt(Cmd):
         else:
             team_enc = urllib.parse.quote_plus(json.dumps(team))
         account = self.sm_config["account"]
-        mana_cap = self.sm_config["mana_cap"]
+        response = self.api.get_player_login(account)
+        acc = Account(account, steem_instance=self.stm)
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        print(self.api.player_save_team(deck_name, team_enc, account, token, mana_cap))
+
+    def help_copytopteam(self):
+        print("copytopteam <number> <deckname>")
+
+    def do_copyteam(self, inp):
+        if inp == "":
+            if len(self.sm_config) == 0:
+                return
+        account = inp.split(' ')[0]
+        deck_name = inp[len(account) + 1:]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        response = self.api.get_player_teams_last_used(account, mana_cap)
+        if len(response) == 0:
+            print("Error in loading last team...")
+            return
+        summoner = response["summoner"]
+        monsters = response["monsters"]
+        team = OrderedDict({"summoner": summoner, "monsters": monsters})
+        if six.PY2:
+            team_enc = urllib.quote_plus(json.dumps(team))
+        else:
+            team_enc = urllib.parse.quote_plus(json.dumps(team))
+        account = self.sm_config["account"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -262,7 +370,7 @@ class SMPrompt(Cmd):
         cards = inp[len(deck_name) + 1:]
         if cards[0] in ["\t", "\n"]:
             cards = cards[1:]
-        mana_cap = self.sm_config["mana_cap"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
         if len(cards.split(":")) > 0:
             summoner = {"id": self.cards_by_name[cards.split(":")[0]]["id"], "gold": False}
             monsters = []
@@ -288,7 +396,6 @@ class SMPrompt(Cmd):
         else:
             team_enc = urllib.parse.quote_plus(json.dumps(team))
 
-        mana_cap = self.sm_config["mana_cap"]
         response = self.api.get_player_login(account)
 
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -303,7 +410,7 @@ class SMPrompt(Cmd):
             if len(self.sm_config) == 0:
                 return
         account = self.sm_config["account"]
-        mana_cap = self.sm_config["mana_cap"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -318,7 +425,7 @@ class SMPrompt(Cmd):
             print("No config file loaded... aborting...")
             return
         account = self.sm_config["account"]
-        mana_cap = self.sm_config["mana_cap"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -415,9 +522,9 @@ class SMPrompt(Cmd):
             inp = "random"
 
         if inp != "random":
-            if inp not in self.sm_config["decks"]:
+            if "decks" not in self.sm_config or inp not in self.sm_config["decks"]:
                 account = self.sm_config["account"]
-                mana_cap = self.sm_config["mana_cap"]
+                mana_cap = self.settings["ranked_settings"]["mana_cap"]
                 response = self.api.get_player_login(account)
                 acc = Account(account, steem_instance=self.stm)
                 wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -440,7 +547,7 @@ class SMPrompt(Cmd):
                 if inp in decks:
                     deck_ids = decks[inp]
                 else:
-                    print("Could not find %d in saved decks" % inp)
+                    print("Could not find %s in saved decks" % inp)
                     return
             else:
                 deck_ids = self.sm_config["decks"][inp]
@@ -450,8 +557,8 @@ class SMPrompt(Cmd):
                       "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
         play_round = 0
 
-        mana_cap = self.sm_config["mana_cap"]
-        ruleset = self.sm_config["ruleset"]
+        mana_cap = mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        ruleset = mana_cap = self.settings["ranked_settings"]["ruleset"]
         match_type = self.sm_config["match_type"]
 
         acc = Account(self.sm_config["account"], steem_instance=self.stm)
