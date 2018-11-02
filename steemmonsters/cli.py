@@ -219,8 +219,17 @@ class SMPrompt(Cmd):
         else:
             account = inp
         response = self.api.get_player_quests(account)
-        tx = json.dumps(response, indent=4)
-        print(tx)
+        if isinstance(response, list) and len(response) == 1:
+            response = response[0]        
+        print("Current quest: %s" % response["name"])
+        if response["claim_trx_id"] is None:
+            print("Current quest is not completed (%d / %d)" % (response["completed_items"], response["total_items"]))
+        else:
+            print("Current quest is completed (%d / %d)" % (response["completed_items"], response["total_items"]))
+        if (datetime.utcnow() - datetime.strptime(response["created_date"], timeFormat)).total_seconds() / 60 / 60 < 24:
+            print("Please wait %.2f h" % (24 - (datetime.utcnow() - datetime.strptime(response["created_date"], timeFormat)).total_seconds() / 60 / 60))
+        # tx = json.dumps(response, indent=4)
+        # print(tx)
 
     def help_quest(self):
         print("Shows quest, a account name can also be given.")
@@ -505,11 +514,20 @@ class SMPrompt(Cmd):
         json_dict = {"type": "daily"}
         self.stm.custom_json('sm_start_quest', json_dict, required_posting_auths=[acc["name"]])
         print("sm_start_quest broadcasted!")
-        sleep(3)
-        response = self.api.get_player_quests(acc["name"])
-        if isinstance(response, list) and len(response) == 1:
-            response = response[0]
-        print("You have to solve the %s quest" % response["name"])
+        success = False
+        cnt = 0
+        while not success and cnt < 10:
+            cnt += 1
+            sleep(3)
+            response = self.api.get_player_quests(acc["name"])
+            if isinstance(response, list) and len(response) == 1:
+                response = response[0]
+            if (datetime.utcnow() - datetime.strptime(response["created_date"], timeFormat)).total_seconds() / 60 / 60 < 1.0:
+                success = True
+        quest_name = response["name"]
+        for q in self.settings["quests"]:
+            if q["name"] == quest_name:
+                print(q["objective"])
 
     def help_startquest(self):
         print("Broadcasts a custom_json with sm_start_quest")
@@ -732,9 +750,17 @@ class SMPrompt(Cmd):
             while not found_match and cnt2 < 40:
                 response = requests.get("https://steemmonsters.com/battle/result?id=%s" % deck["trx_id"])
                 if str(response) != '<Response [200]>':
-                    sleep(2)
+                    try:
+                        sleep(2)
+                    except KeyboardInterrupt:
+                        print("Exiting cleanly...")
+                        return                    
                 elif 'Error' in response.json():
-                    sleep(2)
+                    try:
+                        sleep(2)
+                    except KeyboardInterrupt:
+                        print("Exiting cleanly...")
+                        return                    
                 else:
                     found_match = True
                 cnt2 += 1
