@@ -234,6 +234,16 @@ class Api(object):
             cnt2 += 1
         return response.json()
 
+    def get_market_for_sale_grouped(self):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "market/for_sale_grouped")
+            if str(response) != '<Response [200]>':
+                time.sleep(2)
+            cnt2 += 1
+        return response.json()
+
     def get_market_status(self, market_id):
         response = ""
         cnt2 = 0

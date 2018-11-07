@@ -147,7 +147,7 @@ class SMPrompt(Cmd):
     def help_show_config(self):
         print("Shows the loaded config file")
 
-    def do_show_cards(self, inp):
+    def do_collection(self, inp):
         if inp == "":
             if self.account == "":
                 print("No account set... aborting...")
@@ -155,10 +155,13 @@ class SMPrompt(Cmd):
             cards = self.api.get_collection(self.account)
         else:
             cards = self.api.get_collection(inp)
-        tx = json.dumps(cards, indent=4)
-        print(tx)
+        t = PrettyTable(["uid", "card", "xp", "gold", "edition"])
+        t.align = "l"
+        for c in cards["cards"]:
+            t.add_row([c["uid"], self.cards[c["card_detail_id"]]["name"], c["xp"], c["gold"], c["edition"]])        
+        print(t)
 
-    def help_show_cards(self):
+    def help_collection(self):
         print("Shows the owned cards, an account name can be given as parameter")
 
     def do_conflict(self, inp):
@@ -223,9 +226,19 @@ class SMPrompt(Cmd):
             index = int(input("Please enter pack index to open: "))
         else:
             index = int(raw_input("Please enter pack index to open: "))
+        edition = response["packs"][index]["edition"]
         response = self.api.get_open_packs(response["packs"][index]["uid"], account, response["packs"][index]["edition"], token)
-        tx = json.dumps(response, indent=4)
-        print(tx)
+        cards = response["cards"]
+        t = PrettyTable(["card", "gold", "market value"])
+        t.align = "l"
+        for c in cards:
+            market_response = self.api.get_market_for_sale_by_card(c["card_detail_id"], str(c["gold"]).lower(), edition)
+            if len(market_response) > 0:
+                card_value = (market_response[0]["buy_price"])
+            else:
+                card_value = "-"
+            t.add_row([self.cards[c["card_detail_id"]]["name"], c["gold"], card_value])
+        print(t)
 
     def help_openpack(self):
         print("openpack - Open a pack")
