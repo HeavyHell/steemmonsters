@@ -75,7 +75,7 @@ class Api(object):
         response = ""
         cnt2 = 0
         while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "cards/open_all_packs/%s?player=%s&edition=%d&token=%s" % (player, player, edition, token))
+            response = requests.get(self.__url__ + "cards/open_all_packs/%s?player=%s&edition=%d&token=%s&username=%s" % (player, player, edition, token, player))
             cnt2 += 1
         return response.json()
 
@@ -83,7 +83,7 @@ class Api(object):
         response = ""
         cnt2 = 0
         while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "cards/open_pack/%s?player=%s&edition=%d&token=%s" % (uuid, player, edition, token))
+            response = requests.get(self.__url__ + "cards/open_pack/%s?player=%s&edition=%d&token=%s&username=%s" % (uuid, player, edition, token, player))
             cnt2 += 1
         return response.json()
 

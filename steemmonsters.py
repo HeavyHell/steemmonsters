@@ -183,11 +183,53 @@ class SMPrompt(Cmd):
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
         token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
         response = self.api.get_cards_packs(account, token)
-        tx = json.dumps(response, indent=4)
-        print(tx)    
+        if len(response["packs"]) == 0:
+            print("No pack available")
+            return        
+        t = PrettyTable(["index", "uid", "edition"])
+        t.align = "l"
+        index = 0
+        for p in response["packs"]:
+            t.add_row(["%d" % index, p["uid"], p["edition"]])
+            index += 1        
+        print(t)
 
     def help_packs(self):
         print("Show packs")
+
+    def do_openpack(self, inp):
+        if self.account == "":
+            print("No account set... aborting...")
+            return
+
+        account = self.account
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        response = self.api.get_player_login(account)
+        acc = Account(account, steem_instance=self.stm)        
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        response = self.api.get_cards_packs(account, token)
+        if len(response["packs"]) == 0:
+            print("No pack available")
+            return
+        t = PrettyTable(["index", "uid", "edition"])
+        t.align = "l"
+        index = 0
+        for p in response["packs"]:
+            t.add_row(["%d" % index, p["uid"], p["edition"]])
+            index += 1
+        print(t)
+        if six.PY3:
+            index = int(input("Please enter pack index to open: "))
+        else:
+            index = int(raw_input("Please enter pack index to open: "))
+        response = self.api.get_open_packs(response["packs"][index]["uid"], account, response["packs"][index]["edition"], token)
+        tx = json.dumps(response, indent=4)
+        print(tx)
+
+    def help_openpack(self):
+        print("openpack - Open a pack")
+
 
     def do_giftpacks(self, inp):
         if self.account == "":
@@ -723,10 +765,15 @@ class SMPrompt(Cmd):
         deck_selected = False
         while not deck_selected:
             print(t)
-            if six.PY3:
-                deck_index = int(input("Select deck number: "))
-            else:
-                deck_index = int(raw_input("Select deck number: "))
+            try:
+                if six.PY3:
+                    deck_index = int(input("Select deck number: "))
+                else:
+                    deck_index = int(raw_input("Select deck number: "))                
+            except KeyboardInterrupt:
+                print("Exiting cleanly...")
+                return            
+
             mana_cap = self.settings["ranked_settings"]["mana_cap"]
             deck_selected = True
             [summoner, monsters] = expand_short_form(sorted_deck[deck_index]["deck"], self.cards, output_type="id")
@@ -767,6 +814,7 @@ class SMPrompt(Cmd):
             inp = "random"
         account = self.account
         quest_mode = False
+        random_mode = False
         win_left = 0
         if inp[:6] == "quest ":
             inp = inp[6:]
@@ -777,7 +825,9 @@ class SMPrompt(Cmd):
                 response = response[0]        
             if response["claim_trx_id"] is None and response["completed_items"] < response["total_items"]:
                 win_left = response["total_items"] - response["completed_items"]
-
+        elif inp[:7] == "random ":
+            inp = inp[7:]
+            random_mode = True
         if inp not in ["random", "mirror"]:
             if "decks" not in self.sm_config or inp not in self.sm_config["decks"]:
                 
@@ -817,7 +867,7 @@ class SMPrompt(Cmd):
 
         continue_playing = True
         team_found = False
-        while continue_playing and (self.sm_config["play_counter"] < 0 or play_round < self.sm_config["play_counter"]):
+        while continue_playing and (self.sm_config["play_counter"] < 0 or play_round < self.sm_config["play_counter"] or quest_mode):
             if "play_inside_ranking_border" in self.sm_config and self.sm_config["play_inside_ranking_border"] and not quest_mode:
                 ranking_border = self.sm_config["ranking_border"]
                 response = self.api.get_player_details(acc["name"])
@@ -881,9 +931,12 @@ class SMPrompt(Cmd):
                     change_team = True
                 if change_team:
                     deck_list = inp.split(",")
-                    current_deck_index += 1
-                    if current_deck_index >= len(deck_list):
-                        current_deck_index = 0
+                    if random_mode:
+                        current_deck_index = random.randint(0, len(deck_list) - 1)
+                    else:
+                        current_deck_index += 1
+                        if current_deck_index >= len(deck_list):
+                            current_deck_index = 0
                     current_deck_name = inp.split(",")[current_deck_index].rstrip()
                     if current_deck_name in decks:
                         deck_ids = decks[current_deck_name]
