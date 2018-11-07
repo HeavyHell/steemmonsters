@@ -230,14 +230,14 @@ class SMPrompt(Cmd):
         response = self.api.get_open_packs(response["packs"][index]["uid"], account, response["packs"][index]["edition"], token)
         cards = response["cards"]
         t = PrettyTable(["card", "gold", "market value"])
+        all_cards = self.api.get_market_for_sale_grouped()
         t.align = "l"
         for c in cards:
-            market_response = self.api.get_market_for_sale_by_card(c["card_detail_id"], str(c["gold"]).lower(), edition)
-            if len(market_response) > 0:
-                card_value = (market_response[0]["buy_price"])
-            else:
-                card_value = "-"
-            t.add_row([self.cards[c["card_detail_id"]]["name"], c["gold"], card_value])
+            for ac in all_cards:
+                if ac["gold"] == c["gold"] and c["card_detail_id"] == ac["card_detail_id"] and ac["edition"] == edition:
+                    card_value = ac["low_price"]
+                    break
+            t.add_row([self.cards[c["card_detail_id"]]["name"], c["gold"], "%.2f $" % card_value])
         print(t)
 
     def help_openpack(self):
