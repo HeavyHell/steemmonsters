@@ -70,6 +70,30 @@ class Api(object):
                 time.sleep(2)
             cnt2 += 1
         return response.json()
+    
+    def get_open_all_packs(self, player, edition, token):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "cards/open_all_packs/%s?player=%s&edition=%d&token=%s" % (player, player, edition, token))
+            cnt2 += 1
+        return response.json()
+
+    def get_open_packs(self, uuid, player, edition, token):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "cards/open_pack/%s?player=%s&edition=%d&token=%s" % (uuid, player, edition, token))
+            cnt2 += 1
+        return response.json()
+
+    def get_cards_packs(self, player, token):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "cards/packs/%s?token=%s" % (player, token))
+            cnt2 += 1
+        return response.json()
 
     def get_collection(self, player):
         response = ""
@@ -159,7 +183,7 @@ class Api(object):
                 time.sleep(2)
             cnt2 += 1
         return response.json()
-
+    
     def get_purchases_status(self, uuid):
         response = ""
         cnt2 = 0
@@ -195,6 +219,16 @@ class Api(object):
         cnt2 = 0
         while str(response) != '<Response [200]>' and cnt2 < 10:
             response = requests.get(self.__url__ + "cards/stats")
+            if str(response) != '<Response [200]>':
+                time.sleep(2)
+            cnt2 += 1
+        return response.json()
+
+    def get_market_for_sale_by_card(self, card_detail_id, gold, edition):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "market/for_sale_by_card?card_detail_id=%d&gold=%s&edition=%d" % (card_detail_id, gold, edition))
             if str(response) != '<Response [200]>':
                 time.sleep(2)
             cnt2 += 1

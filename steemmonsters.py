@@ -6,7 +6,7 @@ from builtins import bytes, int, str
 from cmd import Cmd
 from steemmonsters.api import Api
 from steemmonsters.constants import xp_level, max_level_rarity
-from steemmonsters.utils import generate_key, generate_team_hash
+from steemmonsters.utils import generate_key, generate_team_hash, get_summoner_level, convert_team_id_to_string, get_cards_collection, convert_team_string_to_id, expand_short_form
 from beem.blockchain import Blockchain
 from beem.nodelist import NodeList
 from beem import Steem
@@ -26,6 +26,7 @@ import os
 from os.path import exists
 from os.path import expanduser
 import math
+from prettytable import PrettyTable
 import six
 from time import sleep
 import urllib
@@ -78,10 +79,16 @@ class SMPrompt(Cmd):
     appbase = True
     config_file_name = "config.json"
     sm_config = read_config_json(config_file_name, verbose=False)
+    if "account" in sm_config:
+        account = sm_config["account"]
     if "wallet_password" in sm_config:
         wallet_pass = sm_config["wallet_password"]
     else:
         wallet_pass = getpass.getpass(prompt='Enter the beem wallet password.')
+    if "match_type" in sm_config:
+        match_type = sm_config["match_type"]
+    else:
+        match_type = "Ranked"
     nodes = NodeList()
     nodes.update_nodes()
     nodelist = nodes.get_nodes(normal=normal, appbase=appbase, wss=wss, https=https)
@@ -105,6 +112,13 @@ class SMPrompt(Cmd):
     def help_exit(self):
         print('exit the application. Shorthand: x q Ctrl-D.')
 
+    def do_setaccount(self, inp):
+        self.account = inp
+        print("setting '{}'".format(inp))
+
+    def help_setaccount(self):
+        print("changes the account name")
+
     def do_set_account(self, inp):
         self.account = inp
         print("setting '{}'".format(inp))
@@ -112,19 +126,16 @@ class SMPrompt(Cmd):
     def help_set_account(self):
         print("changes the account name")
 
-    def do_set_wallet_password(self, inp):
-        print("wallet password stored")
-        self.wallet_pass = inp
-
-    def help_set_wallet_password(self):
-        print("changes the wallet password")
-
     def do_reload_config(self, inp):
         if inp == "":
             inp = self.config_file_name
         else:
             self.config_file_name = inp
         self.sm_config = read_config_json(inp)
+        if "account" in self.sm_config:
+            self.account = self.sm_config["account"]
+        if "match_type" in self.sm_config:
+            self.match_type = sm_config["match_type"]
 
     def help_reload_config(self):
         print("Reloads the config, a new config files can be given as parameter")
@@ -138,10 +149,10 @@ class SMPrompt(Cmd):
 
     def do_show_cards(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                print("No config file loaded... aborting...")
+            if self.account == "":
+                print("No account set... aborting...")
                 return
-            cards = self.api.get_collection(self.sm_config["account"])
+            cards = self.api.get_collection(self.account)
         else:
             cards = self.api.get_collection(inp)
         tx = json.dumps(cards, indent=4)
@@ -159,29 +170,73 @@ class SMPrompt(Cmd):
     def help_conflict(self):
         print("Show current conflict")
 
+    def do_packs(self, inp):
+        if self.account == "":
+            print("No account set... aborting...")
+            return        
+        if inp == "":
+            account = self.account
+        else:
+            account = inp
+        response = self.api.get_player_login(account)
+        acc = Account(account, steem_instance=self.stm)
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        response = self.api.get_cards_packs(account, token)
+        tx = json.dumps(response, indent=4)
+        print(tx)    
+
+    def help_packs(self):
+        print("Show packs")
+
+    def do_giftpacks(self, inp):
+        if self.account == "":
+            print("No account set... aborting...")
+            return
+        try:
+            to_account = Account(inp, steem_instance=self.stm)
+        except:
+            print("%s is not a valid account" % inp)
+            return
+        response = self.api.get_player_details(to_account["name"])
+        if "error" in response:
+            print("%s is not a valid steemmonsters account" % inp)
+            return
+        account = self.account
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        response = self.api.get_player_login(account)
+        acc = Account(account, steem_instance=self.stm)        
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        response = self.api.get_cards_packs(account, token)
+        if len(response["packs"]) == 0:
+            print("No pack available")
+            return
+        print(json.dumps(response, indent=4))
+        if six.PY3:
+            qty = int(input("Please enter quantity to gift to %s: " % to_account["name"]))
+            edition = int(input("Please enter packs edition (0 - alpha, 1 - beta) to gift to %s: " % to_account["name"]))
+        else:
+            qty = int(raw_input("Please enter quantity to gift to %s: " % to_account["name"]))
+            edition = int(raw_input("Please enter packs edition (0 - alpha, 1 - beta) to gift to %s: " % to_account["name"]))
+        json_dict = {"to": to_account["name"], "qty": qty, "edition": edition}
+        self.stm.custom_json('sm_gift_packs', json_dict, required_posting_auths=[acc["name"]])
+        print("sm_gift_packs broadcasted!")
+        sleep(3)
+
+    def help_giftpacks(self):
+        print("giftpacks <player> - Gift a packs to a different player")
+
     def do_team(self, inp):
         if inp not in self.sm_config["decks"]:
-            account = self.sm_config["account"]
+            account = self.account
             mana_cap = self.settings["ranked_settings"]["mana_cap"]
             response = self.api.get_player_login(account)
             acc = Account(account, steem_instance=self.stm)
             wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
             token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
             response = self.api.get_player_saved_teams(account, token, mana_cap)
-            decks = {}
-            for r in response:
-                summoner = r["summoner"]
-                monsters = r["monsters"]
-                monsters_list = []
-                for m in monsters:
-                    card_name = self.cards[m["id"]]["name"]
-                    if m["gold"]:
-                        card_name += ":gold"
-                    monsters_list.append(card_name)
-                summoner_name = self.cards[summoner["id"]]["name"]
-                if summoner["gold"]:
-                    summoner_name += ":gold"
-                decks[r["name"]] = [summoner_name] + monsters_list
+            decks = convert_team_id_to_string(response, self.cards)
             if inp in decks:
                 deck_ids = decks[inp]
             else:
@@ -197,10 +252,10 @@ class SMPrompt(Cmd):
 
     def do_ranking(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                print("No config file loaded... aborting...")
+            if self.account == "":
+                print("No account set... aborting...")
                 return
-            account = self.sm_config["account"]
+            account = self.account
         else:
             account = inp
         response = self.api.get_player_details(account)
@@ -212,10 +267,10 @@ class SMPrompt(Cmd):
 
     def do_quest(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                print("No config file loaded... aborting...")
+            if self.account == "":
+                print("No account set... aborting...")
                 return
-            account = self.sm_config["account"]
+            account = self.account
         else:
             account = inp
         response = self.api.get_player_quests(account)
@@ -236,10 +291,10 @@ class SMPrompt(Cmd):
 
     def do_player(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                print("No config file loaded... aborting...")
+            if self.account == "":
+                print("No account set... aborting...")
                 return
-            account = self.sm_config["account"]
+            account = self.account
         else:
             account = inp
         response = self.api.get_player_details(account)
@@ -251,10 +306,10 @@ class SMPrompt(Cmd):
 
     def do_lastteam(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                print("No config file loaded... aborting...")
+            if self.account == "":
+                print("No account set... aborting...")
                 return
-            account = self.sm_config["account"]
+            account = self.account
         else:
             account = inp
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
@@ -321,7 +376,7 @@ class SMPrompt(Cmd):
             team_enc = urllib.quote_plus(json.dumps(team))
         else:
             team_enc = urllib.parse.quote_plus(json.dumps(team))
-        account = self.sm_config["account"]
+        account = self.account
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -333,8 +388,11 @@ class SMPrompt(Cmd):
 
     def do_copyteam(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                return
+            print("No player name and deckname given.")
+            return            
+        if self.account == "":
+            print("No account set... aborting...")
+            return
         account = inp.split(' ')[0]
         deck_name = inp[len(account) + 1:]
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
@@ -349,7 +407,7 @@ class SMPrompt(Cmd):
             team_enc = urllib.quote_plus(json.dumps(team))
         else:
             team_enc = urllib.parse.quote_plus(json.dumps(team))
-        account = self.sm_config["account"]
+        account = self.account
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
@@ -361,36 +419,23 @@ class SMPrompt(Cmd):
 
     def do_addteam(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                return
-        account = self.sm_config["account"]
+            print("No deckname given...")
+            return            
+        if self.account == "":
+            print("No account set... aborting...")
+            return
+        account = self.account
         acc = Account(account, steem_instance=self.stm)
         response = self.api.get_collection(acc["name"])
-        mycards = {}
-        for r in response["cards"]:
-            if r["card_detail_id"] not in mycards:
-                mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": self.cards[r["card_detail_id"]]["name"],
-                                                "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
-            elif r["xp"] > mycards[r["card_detail_id"]]["xp"]:
-                mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": self.cards[r["card_detail_id"]]["name"],
-                                                "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
+        mycards = get_cards_collection(response, self.cards)
 
         deck_name = inp.split(' ')[0]
         cards = inp[len(deck_name) + 1:]
         if cards[0] in ["\t", "\n"]:
             cards = cards[1:]
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
-        if len(cards.split(":")) > 0:
-            summoner = {"id": self.cards_by_name[cards.split(":")[0]]["id"], "gold": False}
-            monsters = []
-            for m in cards[(len(cards.split(":")[0]) + 3):].split(","):
-                monsters.append({"id": self.cards_by_name[m.lstrip().split(":")[0]]["id"], "gold": False})
-        else:
-            summoner = {"id": self.cards_by_name[cards.split(",")[0]]["id"], "gold": False}
-            monsters = []
-            for m in cards[(len(cards.split(",")[0]) + 1):].split(","):
-                monsters.append({"id": self.cards_by_name[m.rstrip().lstrip()]["id"], "gold": False})
-
+        
+        [summoner, monsters] = convert_team_string_to_id(cards, self.cards_by_name)
         if summoner["id"] not in mycards:
             print("%s is not in collection" % (self.cards[summoner["id"]]["name"]))
             return
@@ -416,9 +461,12 @@ class SMPrompt(Cmd):
 
     def do_deleteteam(self, inp):
         if inp == "":
-            if len(self.sm_config) == 0:
-                return
-        account = self.sm_config["account"]
+            print("no team name given")
+            return
+        if self.account == "":
+            print("No account name set... aborting ...")
+            return
+        account = self.account
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
@@ -430,30 +478,17 @@ class SMPrompt(Cmd):
         print("deleteteam <deckname>")
 
     def do_savedteams(self, inp):
-        if len(self.sm_config) == 0:
-            print("No config file loaded... aborting...")
+        if self.account == "":
+            print("No account name set... aborting ...")
             return
-        account = self.sm_config["account"]
+        account = self.account
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
         token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
         response = self.api.get_player_saved_teams(account, token, mana_cap)
-        decks = {}
-        for r in response:
-            summoner = r["summoner"]
-            monsters = r["monsters"]
-            monsters_list = []
-            for m in monsters:
-                card_name = self.cards[m["id"]]["name"]
-                if m["gold"]:
-                    card_name += ":gold"
-                monsters_list.append(card_name)
-            summoner_name = self.cards[summoner["id"]]["name"]
-            if summoner["gold"]:
-                summoner_name += ":gold"
-            decks[r["name"]] = ", ".join([summoner_name] + monsters_list)
+        decks = convert_team_id_to_string(response, self.cards)
         if inp == "":
             tx = json.dumps(decks, indent=4)
         else:
@@ -464,10 +499,10 @@ class SMPrompt(Cmd):
         print("Shows saved teams.")
 
     def do_cancel(self, inp):
-        if len(self.sm_config) == 0:
-            print("No config file loaded... aborting...")
+        if self.account == "":
+            print("No account name set... aborting ...")
             return
-        acc = Account(self.sm_config["account"], steem_instance=self.stm)
+        acc = Account(self.account, steem_instance=self.stm)
         self.stm.custom_json('sm_cancel_match', "{}", required_posting_auths=[acc["name"]])
         print("sm_cancel_match broadcasted!")
         sleep(3)
@@ -476,10 +511,10 @@ class SMPrompt(Cmd):
         print("Broadcasts a custom_json with sm_cancel_match")
 
     def do_claimquest(self, inp):
-        if len(self.sm_config) == 0:
-            print("No config file loaded... aborting...")
+        if self.account == "":
+            print("No account name set... aborting ...")
             return
-        acc = Account(self.sm_config["account"], steem_instance=self.stm)
+        acc = Account(self.account, steem_instance=self.stm)
         response = self.api.get_player_quests(acc["name"])
         if isinstance(response, list) and len(response) == 1:
             response = response[0]
@@ -498,10 +533,10 @@ class SMPrompt(Cmd):
         print("Broadcasts a custom_json with sm_claim_reward")
 
     def do_startquest(self, inp):
-        if len(self.sm_config) == 0:
-            print("No config file loaded... aborting...")
+        if self.account == "":
+            print("No account name set... aborting ...")
             return
-        acc = Account(self.sm_config["account"], steem_instance=self.stm)
+        acc = Account(self.account, steem_instance=self.stm)
         response = self.api.get_player_quests(acc["name"])
         if isinstance(response, list) and len(response) == 1:
             response = response[0]
@@ -532,54 +567,245 @@ class SMPrompt(Cmd):
     def help_startquest(self):
         print("Broadcasts a custom_json with sm_start_quest")
 
+    def do_splinter(self, inp):
+        if self.account == "":
+            print("No account name set... aborting ...")
+            return        
+        splinter = inp.split(" ")[0].lower()
+        if splinter == "water":
+            splinter = "blue"
+        elif splinter == "fire":
+            splinter = "red"
+        elif splinter == "earth":
+            splinter = "green"
+        elif splinter == "life":
+            splinter = "white"
+        elif splinter == "death":
+            splinter = "black"
+        elif splinter == "dragon":
+            splinter = "gold"
+        if len(inp.split(" ")) > 1:
+            summoner_level = int(inp.split(" ")[1])
+        else:
+            summoner_level = 4
+        stop_block = self.b.get_current_block_num()
+        start_block = stop_block - 20 * 60 * 1
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        ruleset = self.settings["ranked_settings"]["ruleset"]
+        match_type = self.match_type
+        acc = Account(self.account, steem_instance=self.stm)
+        response = self.api.get_collection(acc["name"])
+        mycards = get_cards_collection(response, self.cards)
+        
+        find_match_cnt = 0
+        deck_score = {}
+        conter_deck = {}
+        cnt = 0
+        last_id_block = []
+        last_round_blocknum = start_block - 1
+        block = start_block
+        last_created_date = ""
+        first_created_date = None
+        while block <= stop_block:
+            cnt += 1
+            if cnt % 1 == 0:
+                print("reading block %d - %s" % (block, last_created_date))
+            response = ""
+            cnt2 = 0
+            while str(response) != '<Response [200]>' and cnt2 < 10:
+                response = requests.get("https://steemmonsters.com/transactions/history?from_block=%d" % block)
+                if str(response) != '<Response [200]>':
+                    sleep(2)
+                cnt2 += 1        
+            for hist in response.json():
+                if hist["type"] != "sm_team_reveal":
+                    continue
+                if not hist["success"]:
+                    continue
+                if hist["block_num"] > last_round_blocknum:
+                    last_id_block = [hist["id"]]
+                    last_round_blocknum = hist["block_num"]
+                    block = last_round_blocknum
+                elif hist["id"] not in last_id_block:
+                    last_id_block.append(hist["id"])
+                else:
+                    continue
+                last_created_date = hist["created_date"]
+                if first_created_date is None:
+                    first_created_date = hist["created_date"]
+                result = json.loads(hist["result"])
+                if "status" in result and result["status"] == "Waiting for opponent reveal.":
+                    continue
+                
+                if "battle" in result:
+                    if result["battle"]["mana_cap"] != mana_cap:
+                        continue
+                    deck_mana_cap = result["battle"]["mana_cap"]
+                    deck_ruleset = result["battle"]["ruleset"]
+                    if "details" in result["battle"]:
+                        team1_summoner_level = get_summoner_level(result["battle"]["details"]["team1"]["summoner"], self.cards, xp_level, max_level_rarity)
+                        team1 = [{"id": result["battle"]["details"]["team1"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team1"]["summoner"]["level"]}]
+                        for m in result["battle"]["details"]["team1"]["monsters"]:
+                            team1.append({"id": m["card_detail_id"], "level": m["level"]})
+                        team1_player = result["battle"]["details"]["team1"]["player"]
+                        if team1_summoner_level != summoner_level:
+                            continue
+                        team2_summoner_level = get_summoner_level(result["battle"]["details"]["team2"]["summoner"], self.cards, xp_level, max_level_rarity)
+                        team2 = [{"id": result["battle"]["details"]["team2"]["summoner"]["card_detail_id"], "level": result["battle"]["details"]["team2"]["summoner"]["level"]}]
+                        for m in result["battle"]["details"]["team2"]["monsters"]:
+                            team2.append({"id": m["card_detail_id"], "level": m["level"]})
+                        team2_player = result["battle"]["details"]["team2"]["player"]
+                        winner = result["battle"]["details"]["winner"] 
+                        if team2_summoner_level != summoner_level:
+                            continue                        
+                    else:
+                        continue
+                else:
+                    continue      
+                
+                team1_str = ""
+                for t in team1:
+                    if team1_str != "":
+                        team1_str += ","
+                    team1_str += str(t["id"])+"-"+str(t["level"])
+                    
+                team2_str = ""
+                for t in team2:
+                    if team2_str != "":
+                        team2_str += ","
+                    team2_str += str(t["id"])+"-"+str(t["level"])              
+    
+                
+                if winner == team1_player:
+                    if self.cards[team1[0]["id"]]["color"].lower() == splinter:
+                        if team1_str in deck_score:
+                            deck_score[team1_str]["n"] += 1
+                            deck_score[team1_str]["score"] += 1
+                            deck_score[team1_str]["win"] += 1
+                        else:
+                            deck_score[team1_str] = {"n": 1, "score": 1, "win": 1, "loose": 0, "mana_cap": deck_mana_cap, "ruleset": deck_ruleset}
+                    if self.cards[team2[0]["id"]]["color"].lower() == splinter:
+                        if team2_str in deck_score:
+                            deck_score[team2_str]["n"] += 1
+                            deck_score[team2_str]["score"] -= 1
+                            deck_score[team2_str]["loose"] += 1
+                        else:
+                            deck_score[team2_str] = {"n": 1, "score": -1, "win": 0, "loose": 1, "mana_cap": deck_mana_cap, "ruleset": deck_ruleset}
+                else:
+                    if self.cards[team2[0]["id"]]["color"].lower() == splinter:
+                        if team2_str in deck_score:
+                            deck_score[team2_str]["n"] += 1
+                            deck_score[team2_str]["score"] += 1
+                            deck_score[team2_str]["win"] += 1
+                        else:
+                            deck_score[team2_str] = {"n": 1, "score": 1, "win": 1, "loose": 0, "mana_cap": deck_mana_cap, "ruleset": deck_ruleset}
+                    if self.cards[team1[0]["id"]]["color"].lower() == splinter:
+                        if team1_str in deck_score:
+                            deck_score[team1_str]["n"] += 1
+                            deck_score[team1_str]["score"] -= 1
+                            deck_score[team1_str]["loose"] += 1
+                        else:
+                            deck_score[team1_str] = {"n": 1, "score": -1, "win": 0, "loose": 1, "mana_cap": deck_mana_cap, "ruleset": deck_ruleset}
+        deck_score_list = []
+        for d in deck_score:
+            if deck_score[d]["mana_cap"] != mana_cap:
+                continue
+            deck_score_list.append(deck_score[d])
+            deck_score_list[-1]["deck"] = d
+        sorted_deck = sorted(deck_score_list, key=lambda x: x["win"] / x["n"], reverse=True)
+        t = PrettyTable(["n", "win ratio", "summoner", "monsters"])
+        t.align = "l"
+        index = 0
+        for deck in sorted_deck[:15]:
+            [summoner_str, monster_str] = expand_short_form(deck["deck"], self.cards)
+            t.add_row(["%d" % index, "%.2f %%" % (deck["win"] / (deck["win"] + deck["loose"]) * 100), summoner_str, monster_str])        
+            index += 1
+        deck_selected = False
+        while not deck_selected:
+            print(t)
+            if six.PY3:
+                deck_index = int(input("Select deck number: "))
+            else:
+                deck_index = int(raw_input("Select deck number: "))
+            mana_cap = self.settings["ranked_settings"]["mana_cap"]
+            deck_selected = True
+            [summoner, monsters] = expand_short_form(sorted_deck[deck_index]["deck"], self.cards, output_type="id")
+            if summoner["id"] not in mycards:
+                print("%s is not in collection" % (self.cards[summoner["id"]]["name"]))
+                deck_selected = False
+                continue
+            for m in monsters:
+                if m["id"] not in mycards:
+                    print("%s is not in collection" % (self.cards[m["id"]]["name"]))
+                    deck_selected = False
+                    continue
+        if six.PY3:
+            team_name = input("Please enter team name: ")
+        else:
+            team_name = raw_input("Please enter team name: ")        
+
+        team = OrderedDict({"summoner": summoner, "monsters": monsters})
+        if six.PY2:
+            team_enc = urllib.quote_plus(json.dumps(team))
+        else:
+            team_enc = urllib.parse.quote_plus(json.dumps(team))
+
+        response = self.api.get_player_login(acc["name"])
+
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        print(self.api.player_save_team(team_name, team_enc, acc["name"], token, mana_cap))
+        
+    def help_splinter(self):
+        print("splinter <splinter> returns different currently played teams.")
+
     def do_play(self, inp):
         if len(self.sm_config) == 0:
             print("No config file loaded... aborting...")
             return
         if inp == "":
             inp = "random"
+        account = self.account
+        quest_mode = False
+        win_left = 0
+        if inp[:6] == "quest ":
+            inp = inp[6:]
+            quest_mode = True
+            
+            response = self.api.get_player_quests(account)
+            if isinstance(response, list) and len(response) == 1:
+                response = response[0]        
+            if response["claim_trx_id"] is None and response["completed_items"] < response["total_items"]:
+                win_left = response["total_items"] - response["completed_items"]
 
-        if inp != "random":
+        if inp not in ["random", "mirror"]:
             if "decks" not in self.sm_config or inp not in self.sm_config["decks"]:
-                account = self.sm_config["account"]
+                
                 mana_cap = self.settings["ranked_settings"]["mana_cap"]
                 response = self.api.get_player_login(account)
                 acc = Account(account, steem_instance=self.stm)
                 wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
                 token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
                 response = self.api.get_player_saved_teams(account, token, mana_cap)
-                decks = {}
-                for r in response:
-                    summoner = r["summoner"]
-                    monsters = r["monsters"]
-                    monsters_list = []
-                    for m in monsters:
-                        card_name = self.cards[m["id"]]["name"]
-                        if m["gold"]:
-                            card_name += ":gold"
-                        monsters_list.append(card_name)
-                    summoner_name = self.cards[summoner["id"]]["name"]
-                    if summoner["gold"]:
-                        summoner_name += ":gold"
-                    decks[r["name"]] = [summoner_name] + monsters_list
-                if inp in decks:
-                    deck_ids = decks[inp]
+                decks = convert_team_id_to_string(response, self.cards)
+                current_deck_index = 0
+                if inp.split(",")[0] in decks:
+                    deck_ids = decks[inp.split(",")[0]]
                 else:
                     print("Could not find %s in saved decks" % inp)
                     return
             else:
                 deck_ids = self.sm_config["decks"][inp]
-        else:
-            deck_ids_list = list(self.sm_config["decks"].keys())
+
         statistics = {"won": 0, "battles": 0, "loosing_streak": 0,
                       "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
         play_round = 0
 
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
         ruleset = self.settings["ranked_settings"]["ruleset"]
-        match_type = self.sm_config["match_type"]
+        match_type = self.match_type
 
-        acc = Account(self.sm_config["account"], steem_instance=self.stm)
+        acc = Account(self.account, steem_instance=self.stm)
 
         response = self.api.get_player_details(acc["name"])
         print("%s rank: %s, rating: %d, battles: %d, "
@@ -587,31 +813,85 @@ class SMPrompt(Cmd):
                                              response["battles"], response["wins"], response["current_streak"]))
 
         response = self.api.get_collection(acc["name"])
-        mycards = {}
-        for r in response["cards"]:
-            if r["card_detail_id"] not in mycards:
-                mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": self.cards[r["card_detail_id"]]["name"],
-                                                "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
-            elif r["xp"] > mycards[r["card_detail_id"]]["xp"]:
-                mycards[r["card_detail_id"]] = {"uid": r["uid"], "xp": r["xp"], "name": self.cards[r["card_detail_id"]]["name"],
-                                                "edition": r["edition"], "id": r["card_detail_id"], "gold": r["gold"]}
+        mycards = get_cards_collection(response, self.cards)
+
         continue_playing = True
+        team_found = False
         while continue_playing and (self.sm_config["play_counter"] < 0 or play_round < self.sm_config["play_counter"]):
-            if "play_inside_ranking_border" in self.sm_config and self.sm_config["play_inside_ranking_border"]:
+            if "play_inside_ranking_border" in self.sm_config and self.sm_config["play_inside_ranking_border"] and not quest_mode:
                 ranking_border = self.sm_config["ranking_border"]
                 response = self.api.get_player_details(acc["name"])
                 if response["rating"] < ranking_border[0] or response["rating"] > ranking_border[1]:
                     print("Stop playing, rating %d outside [%d, %d]" % (response["rating"], ranking_border[0], ranking_border[1]))
                     continue_playing = False
                     continue
-            if "stop_on_loosing_streak" in self.sm_config and self.sm_config["stop_on_loosing_streak"] > 0:
+            if "stop_on_loosing_streak" in self.sm_config and self.sm_config["stop_on_loosing_streak"] > 0 and not quest_mode:
                 if statistics["loosing_streak"] >= self.sm_config["stop_on_loosing_streak"]:
                     print("Stop playing, did lose %d times in a row" % (statistics["loosing_streak"]))
                     continue_playing = False
                     continue
+            if quest_mode:
+                response = self.api.get_player_quests(account)
+                if isinstance(response, list) and len(response) == 1:
+                    response = response[0]        
+                if response["claim_trx_id"] is None and response["completed_items"] < response["total_items"]:
+                    win_left = response["total_items"] - response["completed_items"]
+                if win_left <= 0:
+                    print("Stop playing, won enough times to solve the quest!")
+                    continue_playing = False
+                    continue                
             if inp == "random":
+                deck_ids_list = list(self.sm_config["decks"].keys())
                 deck_ids = self.sm_config["decks"][deck_ids_list[random.randint(0, len(deck_ids_list) - 1)]]
                 print("Random mode: play %s" % str(deck_ids))
+            elif inp == "mirror":
+                if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
+                    if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
+                        team_found = False
+                elif statistics["last_match_lose"]:
+                    team_found = False
+                while not team_found:
+                    rand_number = random.randint(0, 99)
+                    leaderboard = self.api.players_leaderboard()
+                    account = leaderboard[rand_number]["player"]
+                    mana_cap = self.settings["ranked_settings"]["mana_cap"]
+                    response = self.api.get_player_teams_last_used(account, mana_cap)
+                    if len(response) == 0:
+                        continue
+                    deck_ids = convert_team_id_to_string(response, self.cards)
+
+                    all_card_in_selection = True
+                    for ids in deck_ids:
+                        if isinstance(ids, str):
+                            card_id = self.cards_by_name[ids.split(":")[0]]["id"]
+                        else:
+                            card_id = ids
+                        if card_id not in mycards:
+                            all_card_in_selection = False
+                    if not all_card_in_selection:
+                        continue
+                    team_found = True
+                    print("selected deck %s" % str(deck_ids))
+            elif inp not in ["random", "mirror"] and len(inp.split(",")) > 0:
+                change_team = False
+                if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
+                    if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
+                        change_team = True
+                elif statistics["last_match_lose"]:
+                    change_team = True
+                if change_team:
+                    deck_list = inp.split(",")
+                    current_deck_index += 1
+                    if current_deck_index >= len(deck_list):
+                        current_deck_index = 0
+                    current_deck_name = inp.split(",")[current_deck_index].rstrip()
+                    if current_deck_name in decks:
+                        deck_ids = decks[current_deck_name]
+                        print("Switch deck to %s" % str(current_deck_name))
+                    else:
+                        print("Could not find %s in saved decks" % current_deck_name)
+                        return
+
             if play_round > 0 and "play_delay" in self.sm_config:
                 if self.sm_config["play_delay"] >= 1:
                     print("waiting %d seconds" % self.sm_config["play_delay"])
@@ -812,6 +1092,7 @@ class SMPrompt(Cmd):
                 if statistics["last_match_won"]:
                     statistics["winning_streak"] += 1
                 statistics["won"] += 1
+                win_left -= 1
                 statistics["loosing_streak"] = 0
                 statistics["last_match_won"] = True
                 statistics["last_match_lose"] = False
@@ -823,7 +1104,10 @@ class SMPrompt(Cmd):
                 statistics["last_match_lose"] = True
 
             statistics["battles"] += 1
-            print("%d of %d matches won using %s deck" % (statistics["won"], statistics["battles"], inp))
+            if len(inp.split(",")) > 0:
+                print("%d of %d matches won using %s deck (%s)" % (statistics["won"], statistics["battles"], inp.split(",")[current_deck_index], inp))
+            else:
+                print("%d of %d matches won using %s deck" % (statistics["won"], statistics["battles"], inp))
             if acc["name"] == response.json()["player_1"]:
                 print("Score %d -> %d" % (response.json()["player_1_rating_initial"], response.json()["player_1_rating_final"]))
             else:
