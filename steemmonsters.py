@@ -868,7 +868,6 @@ class SMPrompt(Cmd):
         if inp not in ["random", "mirror"]:
             if "decks" not in self.sm_config or inp not in self.sm_config["decks"]:
 
-                current_deck_index = 0
                 if inp.split(",")[0] in decks:
                     deck_ids = decks[inp.split(",")[0]]
                 else:
@@ -927,12 +926,12 @@ class SMPrompt(Cmd):
             elif inp == "mirror":
                 if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
                     if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
-                        team_found = False
-                elif "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
-                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
-                        team_found = False         
+                        team_found = False      
                 elif statistics["last_match_lose"]:
                     team_found = False
+                if "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
+                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
+                        team_found = False              
                 while not team_found:
                     rand_number = random.randint(0, 99)
                     leaderboard = self.api.players_leaderboard()
@@ -960,11 +959,11 @@ class SMPrompt(Cmd):
                 if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
                     if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
                         change_team = True
-                elif "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
-                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
-                        change_team = True                
                 elif statistics["last_match_lose"]:
                     change_team = True
+                if "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
+                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
+                        change_team = True          
                 if change_team:
                     deck_list = inp.split(",")
                     if random_mode:
@@ -973,7 +972,7 @@ class SMPrompt(Cmd):
                         current_deck_index += 1
                         if current_deck_index >= len(deck_list):
                             current_deck_index = 0
-                    current_deck_name = inp.split(",")[current_deck_index].rstrip()
+                    current_deck_name = inp.split(",")[current_deck_index].strip()
                     if current_deck_name in decks:
                         deck_ids = decks[current_deck_name]
                         print("Switch deck to %s" % str(current_deck_name))
