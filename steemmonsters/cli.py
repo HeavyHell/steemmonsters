@@ -135,7 +135,7 @@ class SMPrompt(Cmd):
         if "account" in self.sm_config:
             self.account = self.sm_config["account"]
         if "match_type" in self.sm_config:
-            self.match_type = sm_config["match_type"]
+            self.match_type = self.sm_config["match_type"]
 
     def help_reload_config(self):
         print("Reloads the config, a new config files can be given as parameter")
