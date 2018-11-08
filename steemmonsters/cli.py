@@ -537,13 +537,18 @@ class SMPrompt(Cmd):
             print("No account name set... aborting ...")
             return
         account = self.account
+        decks = {}
+        if "decks" in self.sm_config:
+            decks = self.sm_config["decks"]        
         mana_cap = self.settings["ranked_settings"]["mana_cap"]
         response = self.api.get_player_login(account)
         acc = Account(account, steem_instance=self.stm)
         wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
         token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
         response = self.api.get_player_saved_teams(account, token, mana_cap)
-        decks = convert_team_id_to_string(response, self.cards)
+        deck_response = convert_team_id_to_string(response, self.cards)
+        for d in deck_response:
+            decks[d] = deck_response[d]        
         if inp == "":
             tx = json.dumps(decks, indent=4)
         else:
@@ -780,9 +785,15 @@ class SMPrompt(Cmd):
             print(t)
             try:
                 if six.PY3:
-                    deck_index = int(input("Select deck number: "))
+                    value = input("Select deck number: ")
+                    if value == "":
+                        continue
+                    deck_index = int(value)
                 else:
-                    deck_index = int(raw_input("Select deck number: "))                
+                    value = raw_input("Select deck number: ")
+                    if value == "":
+                        continue
+                    deck_index = int(value)                
             except KeyboardInterrupt:
                 print("Exiting cleanly...")
                 return            
@@ -820,14 +831,27 @@ class SMPrompt(Cmd):
         print("splinter <splinter> returns different currently played teams.")
 
     def do_play(self, inp):
-        if len(self.sm_config) == 0:
-            print("No config file loaded... aborting...")
+        if self.account == "":
+            print("No account set... aborting...")
             return
         if inp == "":
             inp = "random"
         account = self.account
         quest_mode = False
         random_mode = False
+        current_deck_index = 0
+        decks = {}
+        if "decks" in self.sm_config:
+            decks = self.sm_config["decks"]
+        mana_cap = self.settings["ranked_settings"]["mana_cap"]
+        response = self.api.get_player_login(account)
+        acc = Account(account, steem_instance=self.stm)
+        wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
+        token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
+        response = self.api.get_player_saved_teams(account, token, mana_cap)
+        deck_response = convert_team_id_to_string(response, self.cards)
+        for d in deck_response:
+            decks[d] = deck_response[d]
         win_left = 0
         if inp[:6] == "quest ":
             inp = inp[6:]
@@ -843,14 +867,7 @@ class SMPrompt(Cmd):
             random_mode = True
         if inp not in ["random", "mirror"]:
             if "decks" not in self.sm_config or inp not in self.sm_config["decks"]:
-                
-                mana_cap = self.settings["ranked_settings"]["mana_cap"]
-                response = self.api.get_player_login(account)
-                acc = Account(account, steem_instance=self.stm)
-                wif = self.stm.wallet.getPrivateKeyForPublicKey(acc["posting"]["key_auths"][0][0])
-                token = BtsMemo.decode_memo(PrivateKey(wif), response["token"]).replace('\n', '')
-                response = self.api.get_player_saved_teams(account, token, mana_cap)
-                decks = convert_team_id_to_string(response, self.cards)
+
                 current_deck_index = 0
                 if inp.split(",")[0] in decks:
                     deck_ids = decks[inp.split(",")[0]]
@@ -858,7 +875,7 @@ class SMPrompt(Cmd):
                     print("Could not find %s in saved decks" % inp)
                     return
             else:
-                deck_ids = self.sm_config["decks"][inp]
+                deck_ids = decks[inp]
 
         statistics = {"won": 0, "battles": 0, "loosing_streak": 0,
                       "winning_streak": 0, "last_match_won": False, "last_match_lose": False}
@@ -911,6 +928,9 @@ class SMPrompt(Cmd):
                 if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
                     if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
                         team_found = False
+                elif "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
+                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
+                        team_found = False         
                 elif statistics["last_match_lose"]:
                     team_found = False
                 while not team_found:
@@ -940,6 +960,9 @@ class SMPrompt(Cmd):
                 if "switch_on_loosing_streak" in self.sm_config and self.sm_config["switch_on_loosing_streak"] > 0:
                     if statistics["loosing_streak"] >= self.sm_config["switch_on_loosing_streak"]:
                         change_team = True
+                elif "switch_on_winning_streak" in self.sm_config and self.sm_config["switch_on_winning_streak"] > 0:
+                    if statistics["winning_streak"] >= self.sm_config["switch_on_winning_streak"]:
+                        change_team = True                
                 elif statistics["last_match_lose"]:
                     change_team = True
                 if change_team:
