@@ -1,12 +1,25 @@
-import random
 import string
 import hashlib
 import math
+import sys
 from collections import OrderedDict
 
 
 def generate_key(length):
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
+    """
+    Generate a random string of ASCII alphanumeric characters.
+
+    Parameters
+    ----------
+    length : int
+        length of the returned string (number of random characters)
+    """
+    if sys.version_info >= (3, 6):
+        from secrets import choice
+    else:
+        from random import choice
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(choice(alphabet) for _ in range(length))
 
 
 def generate_team_hash(summoner, monsters, secret):
