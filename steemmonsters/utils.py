@@ -40,6 +40,26 @@ def get_summoner_level(summoner_card, cards, xp_level, max_level_rarity):
     summoner_level = int(math.ceil(summoner_level / max_level_rarity[cards[card_id]["rarity"]] * 4))
     return summoner_level
 
+def mana_team_id(response, cards):
+    mana_sum = 0
+    if not isinstance(response, list):
+        response = [response]
+    for r in response:
+        summoner = r["summoner"]
+        monsters = r["monsters"]
+        monsters_list = []
+        for m in monsters:
+            mana = cards[m["id"]]['stats']['mana']
+            if isinstance(mana, list):
+                mana = mana[0]            
+            mana_sum += mana
+        
+        mana = cards[summoner["id"]]['stats']['mana']
+        if isinstance(mana, list):
+            mana = mana[0]             
+        mana_sum += mana
+    return mana_sum
+
 def convert_team_id_to_string(response, cards):
     if not isinstance(response, list):
         response = [response]
