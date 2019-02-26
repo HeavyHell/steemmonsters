@@ -70,7 +70,54 @@ class Api(object):
                 time.sleep(2)
             cnt2 += 1
         return response.json()
-    
+
+    def get_upcoming_tournaments(self, player=None, token=None):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            if player is None and token is None:
+                response = requests.get(self.__url__ + "tournaments/upcoming")
+            elif token is None:
+                response = requests.get(self.__url__ + "tournaments/upcoming?username=%s" % (player))
+            else:
+                response = requests.get(self.__url__ + "tournaments/upcoming?token=%s&username=%s" % (token, player))
+            cnt2 += 1
+        return response.json()
+
+    def get_inprogress_tournaments(self, player=None, token=None):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            if player is None and token is None:
+                response = requests.get(self.__url__ + "tournaments/in_progress")
+            elif token is None:
+                response = requests.get(self.__url__ + "tournaments/in_progress?username=%s" % (player))
+            else:
+                response = requests.get(self.__url__ + "tournaments/in_progress?token=%s&username=%s" % (token, player))
+            cnt2 += 1
+        return response.json()
+
+    def get_completed_tournaments(self, player=None, token=None):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            if player is None and token is None:
+                response = requests.get(self.__url__ + "tournaments/completed")
+            elif token is None:
+                response = requests.get(self.__url__ + "tournaments/completed?username=%s" % (player))
+            else:
+                response = requests.get(self.__url__ + "tournaments/completed?token=%s&username=%s" % (token, player))
+            cnt2 += 1
+        return response.json()
+
+    def get_tournament(self, player, uid, token):
+        response = ""
+        cnt2 = 0
+        while str(response) != '<Response [200]>' and cnt2 < 10:
+            response = requests.get(self.__url__ + "tournaments/find?id=%s&token=%s&username=%s" % (uid, token, player))
+            cnt2 += 1
+        return response.json()
+
     def get_open_all_packs(self, player, edition, token):
         response = ""
         cnt2 = 0
@@ -118,44 +165,7 @@ class Api(object):
             response = requests.get(self.__url__ + "players/details?name=%s" % player)
             cnt2 += 1
         return response.json()
-
-    def player_save_team(self, name, team, player, token, mana_cap):
-        response = ""
-        cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "players/save_team?name=%s&team=%s&mana_cap=%d&token=%s&username=%s" % (name, team, mana_cap, token, player))
-            cnt2 += 1
-        return response.json()
-
-    def player_delete_team(self, name, player, token, mana_cap):
-        response = ""
-        cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "players/delete_team?name=%s&mana_cap=%d&token=%s&username=%s" % (name, mana_cap, token, player))
-            cnt2 += 1
-        return response.json()
-
-    def get_player_saved_teams(self, player, token, mana_cap):
-        response = ""
-        cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "players/saved_teams?mana_cap=%d&token=%s&username=%s" % (mana_cap, token, player))
-            cnt2 += 1
-        if str(response) == '<Response [500]>':
-            print(response.content)
-            return {}
-        return response.json()
-
-    def get_player_teams_last_used(self, player, mana_cap):
-        response = ""
-        cnt2 = 0
-        while str(response) != '<Response [200]>' and cnt2 < 10:
-            response = requests.get(self.__url__ + "players/saved_teams?mana_cap=%d&team=Last%%20Used&player=%s" % (mana_cap, player))
-            cnt2 += 1
-        if len(response.content) == 0:
-            return ""
-        return response.json()
-
+  
     def get_player_quests(self, player):
         response = ""
         cnt2 = 0
