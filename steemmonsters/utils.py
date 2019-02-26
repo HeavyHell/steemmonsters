@@ -60,6 +60,20 @@ def mana_team_id(response, cards):
         mana_sum += mana
     return mana_sum
 
+def mana_team_string(s, cards):
+    mana_sum = 0
+
+    for r in s.split(','):
+        r_id = int(r.split('-')[0])
+        r_lvl = int(r.split('-')[1])
+        mana = cards[r_id]['stats']['mana']
+        if isinstance(mana, list) and len(mana) >= r_lvl:
+            mana = mana[r_lvl-1]
+        elif isinstance(mana, list):
+            mana = mana[-1]
+        mana_sum += mana
+    return mana_sum
+
 def convert_team_id_to_string(response, cards):
     if not isinstance(response, list):
         response = [response]
