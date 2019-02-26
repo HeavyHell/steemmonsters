@@ -28,17 +28,19 @@ def generate_team_hash(summoner, monsters, secret):
     team_hash = m.hexdigest()
     return team_hash
 
-
-def get_summoner_level(summoner_card, cards, xp_level, max_level_rarity):
-    card_id = summoner_card["card_detail_id"]
+def get_card_level(card, cards, xp_level, max_level_rarity):
+    if "card_detail_id" in card:
+        card_id = card["card_detail_id"]
+    else:
+        card_id = card["id"]
+    card_level = 0
     for x in xp_level:
-        if x["edition"] == summoner_card["edition"] and x["rarity"] == cards[card_id]["rarity"]:
-            summoner_level = 0
+        if x["edition"] == card["edition"] and x["rarity"] == cards[card_id]["rarity"]:
             for l in x["xp_level"]:
-                if summoner_card["xp"] >= x["xp_level"][l]:
-                    summoner_level = l
-    summoner_level = int(math.ceil(summoner_level / max_level_rarity[cards[card_id]["rarity"]] * 4))
-    return summoner_level
+                if card["xp"] >= x["xp_level"][l]:
+                    card_level = l
+    # card_level = int(math.ceil(card_level / max_level_rarity[cards[card_id]["rarity"]] * 4))
+    return card_level
 
 def mana_team_id(response, cards):
     mana_sum = 0
@@ -57,6 +59,19 @@ def mana_team_id(response, cards):
         mana = cards[summoner["id"]]['stats']['mana']
         if isinstance(mana, list):
             mana = mana[0]             
+        mana_sum += mana
+    return mana_sum
+
+def mana_team_string(s, cards):
+    mana_sum = 0
+    for r in s.split(','):
+        r_id = int(r.split('-')[0])
+        r_lvl = int(r.split('-')[1])
+        mana = cards[r_id]['stats']['mana']
+        if isinstance(mana, list) and len(mana) >= r_lvl:
+            mana = mana[r_lvl-1]
+        elif isinstance(mana, list):
+            mana = mana[-1]
         mana_sum += mana
     return mana_sum
 
